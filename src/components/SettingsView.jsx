@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Download, DatabaseZap, TriangleAlert, Plus } from "lucide-react";
 import { Card, TInput, BtnPrimary, BtnGhost, Muted } from "./ui/index.jsx";
-import { P } from "../lib/tokens.js";
+import { P, alpha } from "../lib/tokens.js";
 import { RESET_DAYS, PER_INCIDENT_CAP, PER_MONTH_CAP, EMERGENCY_QUOTA, LAW_CITATION } from "../lib/constants.js";
 
 function ListEditor({ title, items, onChange, placeholder }) {
@@ -32,7 +32,7 @@ function ListEditor({ title, items, onChange, placeholder }) {
                 height: 18,
                 borderRadius: 999,
                 border: "none",
-                background: "rgba(255,255,255,0.18)",
+                background: "var(--mist)",
                 color: P.ink,
                 cursor: "pointer",
                 fontSize: 11,
@@ -101,7 +101,7 @@ export default function SettingsView({ data, onAccounts, onTls, onReset, onExpor
         </div>
       </Card>
 
-      <Card title="Danger zone" accent={`${P.brick}55`}>
+      <Card title="Danger zone" accent={`${alpha(P.brick, 0.33)}`}>
         <div className="ao-disp font-bold uppercase tracking-wide flex items-center gap-1.5" style={{ fontSize: 13, color: P.brick, marginTop: -8 }}>
           <TriangleAlert size={13} />
           Hard reset

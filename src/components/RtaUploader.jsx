@@ -7,7 +7,7 @@
 import { useMemo, useRef, useState } from "react";
 import { UploadCloud, FileSpreadsheet, ClipboardPaste, Download, Send, X, CircleCheck, CircleAlert } from "lucide-react";
 import { Card, Pill, Muted, BtnPrimary, BtnGhost, TSelect, TArea, Label } from "./ui/index.jsx";
-import { P, sevColor } from "../lib/tokens.js";
+import { P, sevColor, alpha } from "../lib/tokens.js";
 import { fmtMin, plural } from "../lib/format.js";
 import { assessRta, buildEntries, TEMPLATE_CSV } from "../lib/rta.js";
 import { AUTO_ACK_ACTION } from "../lib/compensation.js";
@@ -123,7 +123,7 @@ export default function RtaUploader({ data, me, onCommit }) {
               className="mt-4 p-8 text-center"
               style={{
                 border: `2px dashed ${dragOver ? P.petrol : P.line}`,
-                background: dragOver ? "rgba(139,92,246,0.10)" : "rgba(255,255,255,0.05)",
+                background: dragOver ? P.signalWash : "var(--well)",
                 borderRadius: 12,
                 cursor: "pointer",
               }}
@@ -182,14 +182,14 @@ export default function RtaUploader({ data, me, onCommit }) {
         )}
 
         {result?.error && (
-          <div className="mt-3 flex items-start gap-2 p-3" style={{ background: "rgba(236,111,93,0.10)", border: `1px solid ${P.brick}55`, borderRadius: 8 }}>
+          <div className="mt-3 flex items-start gap-2 p-3" style={{ background: P.brickWash, border: `1px solid ${alpha(P.brick, 0.33)}`, borderRadius: 8 }}>
             <CircleAlert size={15} color={P.brick} style={{ flexShrink: 0, marginTop: 1 }} />
             <span style={{ fontSize: 12.5, color: P.inkSoft }}>{result.error}</span>
           </div>
         )}
 
         {result && !result.error && (
-          <div className="mt-3 flex items-start gap-2 p-3" style={{ background: "rgba(70,192,138,0.12)", border: `1px solid ${P.green}55`, borderRadius: 8 }}>
+          <div className="mt-3 flex items-start gap-2 p-3" style={{ background: P.greenWash, border: `1px solid ${alpha(P.green, 0.33)}`, borderRadius: 8 }}>
             <CircleCheck size={15} color={P.green} style={{ flexShrink: 0, marginTop: 1 }} />
             <span style={{ fontSize: 12.5, color: P.inkSoft }}>
               Committed: <b>{plural(result.toTriage, "case")}</b> to the triage gate, <b>{result.acked}</b> auto-acknowledged
@@ -217,7 +217,7 @@ export default function RtaUploader({ data, me, onCommit }) {
           }
         >
           {assessed.error ? (
-            <div className="flex items-start gap-2 p-3" style={{ background: "rgba(236,111,93,0.10)", border: `1px solid ${P.brick}55`, borderRadius: 8 }}>
+            <div className="flex items-start gap-2 p-3" style={{ background: P.brickWash, border: `1px solid ${alpha(P.brick, 0.33)}`, borderRadius: 8 }}>
               <CircleAlert size={15} color={P.brick} style={{ flexShrink: 0, marginTop: 1 }} />
               <span style={{ fontSize: 12.5, color: P.inkSoft }}>{assessed.error}</span>
             </div>

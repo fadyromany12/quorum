@@ -34,9 +34,10 @@ import {
 
 import { useServerData } from "../hooks/useServerData.js";
 import { useCountUp } from "../hooks/useCountUp.js";
-import { P, accColor } from "../lib/tokens.js";
+import { P, accColor, alpha } from "../lib/tokens.js";
 import { BRAND } from "../lib/brand";
 import Logo from "./Logo";
+import ThemeToggle from "./ThemeToggle";
 import { todayStr, daysAgo, monthOf } from "../lib/dates.js";
 import { fmtMin } from "../lib/format.js";
 import { statusOf, computeEscalations, countsForDiscipline } from "../lib/engine.js";
@@ -68,7 +69,7 @@ const NAV = [
   { id: "settings", label: "Settings", icon: Settings2 },
 ];
 
-export default function Workspace({ initial, me }) {
+export default function Workspace({ initial, me, themeIntent }) {
   const {
     data,
     error,
@@ -212,12 +213,13 @@ export default function Workspace({ initial, me }) {
       {/* ── Header band — sticky glass over the aurora ── */}
       <header
         className="ao-glass"
-        style={{ background: "rgba(6,12,20,0.65)", borderBottom: `1px solid ${P.line}`, position: "sticky", top: 0, zIndex: 40 }}
+        style={{ background: "var(--hdr-bg)", borderBottom: `1px solid ${P.line}`, position: "sticky", top: 0, zIndex: 40 }}
       >
         <div className="mx-auto px-4 py-4" style={{ maxWidth: 1320 }}>
           <div className="flex items-center gap-3 flex-wrap">
             <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org} · DCM v1.0`} />
             <span className="flex-1" />
+            <ThemeToggle initial={themeIntent} />
             <UserChip me={me} onLogout={() => signOut({ callbackUrl: "/login" })} />
           </div>
 
@@ -232,10 +234,10 @@ export default function Workspace({ initial, me }) {
                   padding: "5px 12px",
                   borderRadius: 999,
                   cursor: "pointer",
-                  color: acc === a ? "#06121A" : "#C9D6D4",
-                  background: acc === a ? "#E9F1F0" : "transparent",
-                  border: `1px solid ${acc === a ? "#E9F1F0" : "#3A4155"}`,
-                  "--glow": a === "All" ? "rgba(139,92,246,0.6)" : `${accColor(a)}aa`,
+                  color: acc === a ? "var(--chip-on-text)" : "var(--hdr-text)",
+                  background: acc === a ? "var(--chip-on-bg)" : "transparent",
+                  border: `1px solid ${acc === a ? "var(--chip-on-bg)" : "var(--hdr-line)"}`,
+                  "--glow": a === "All" ? "color-mix(in srgb, var(--signal) 60%, transparent)" : `${alpha(accColor(a), 0.67)}`,
                 }}
               >
                 {a !== "All" && (
@@ -252,7 +254,7 @@ export default function Workspace({ initial, me }) {
               value={range}
               onChange={(e) => setRange(e.target.value)}
               className="ao-disp uppercase tracking-wide font-semibold"
-              style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "transparent", color: "#C9D6D4", border: "1px solid #3A4155" }}
+              style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "transparent", color: "var(--hdr-text)", border: "1px solid var(--hdr-line)" }}
             >
               <option value="all" style={{ color: P.ink }}>All time</option>
               <option value="30" style={{ color: P.ink }}>Last 30 days</option>
@@ -267,7 +269,7 @@ export default function Workspace({ initial, me }) {
         <div className="mx-auto px-4" style={{ maxWidth: 1320 }}>
           <div
             className="flex items-center gap-2 mt-3 p-3"
-            style={{ background: "rgba(236,111,93,0.10)", border: `1px solid ${P.brick}66`, borderRadius: 8 }}
+            style={{ background: P.brickWash, border: `1px solid ${alpha(P.brick, 0.4)}`, borderRadius: 8 }}
             role="alert"
           >
             <CircleAlert size={15} color={P.brick} style={{ flexShrink: 0 }} />
@@ -396,7 +398,7 @@ export default function Workspace({ initial, me }) {
                       <select
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        style={{ fontSize: 12, color: P.inkSoft, border: `1px solid ${P.line}`, borderRadius: 999, padding: "3px 8px", background: "rgba(255,255,255,0.05)" }}
+                        style={{ fontSize: 12, color: P.inkSoft, border: `1px solid ${P.line}`, borderRadius: 999, padding: "3px 8px", background: "var(--well)" }}
                       >
                         <option>All</option>
                         <option>Unassigned</option>
@@ -523,12 +525,12 @@ export default function Workspace({ initial, me }) {
         <div
           className="ao-slide-in ao-glass fixed bottom-5 right-5 z-50 flex items-center gap-2.5"
           style={{
-            background: "rgba(10,24,22,0.85)",
-            border: `1px solid ${P.green}55`,
+            background: "var(--toast-bg)",
+            border: `1px solid ${alpha(P.green, 0.33)}`,
             borderRadius: 12,
             padding: "12px 16px",
             maxWidth: 380,
-            boxShadow: `0 12px 40px rgba(2,6,23,0.6), 0 0 24px -8px ${P.green}66`,
+            boxShadow: `var(--elev-3), 0 0 24px -8px ${alpha(P.green, 0.4)}`,
           }}
           role="status"
         >
@@ -551,12 +553,12 @@ export default function Workspace({ initial, me }) {
 
 function UserChip({ me, onLogout }) {
   return (
-    <div className="flex items-center gap-2 pl-3" style={{ borderLeft: "1px solid #3A4155" }}>
+    <div className="flex items-center gap-2 pl-3" style={{ borderLeft: "1px solid var(--hdr-line)" }}>
       <div className="text-right min-w-0">
-        <div className="ao-disp font-semibold truncate" style={{ fontSize: 12.5, color: "#F2F6F5", lineHeight: 1.2 }}>
+        <div className="ao-disp font-semibold truncate" style={{ fontSize: 12.5, color: "var(--hdr-strong)", lineHeight: 1.2 }}>
           {me.name}
         </div>
-        <div className="ao-mono" style={{ fontSize: 10, color: "#8B9AA6" }}>
+        <div className="ao-mono" style={{ fontSize: 10, color: "var(--sub)" }}>
           {ROLE_LABEL[me.role]}
         </div>
       </div>
@@ -564,7 +566,7 @@ function UserChip({ me, onLogout }) {
         onClick={onLogout}
         title="Sign out"
         aria-label="Sign out"
-        style={{ border: "1px solid #3A4155", background: "transparent", color: "#C9D6D4", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
+        style={{ border: "1px solid var(--hdr-line)", background: "transparent", color: "var(--hdr-text)", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
       >
         <LogOut size={13} />
       </button>
@@ -657,7 +659,7 @@ function KPI({ label, value, format, icon: Icon, tone, onClick }) {
         border: `1px solid ${P.line}`,
         borderRadius: 12,
         cursor: onClick ? "pointer" : "default",
-        "--glow": tone || "rgba(139,92,246,0.6)",
+        "--glow": tone || "color-mix(in srgb, var(--signal) 60%, transparent)",
       }}
     >
       <div className="flex items-center gap-2">

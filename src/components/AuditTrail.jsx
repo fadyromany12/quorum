@@ -19,8 +19,8 @@ const ACTIONS = {
   CASE_DECIDED: { label: "Decided", color: P.amber, icon: Gavel },
   CASE_UPDATED: { label: "Updated", color: P.sub, icon: Pencil },
   CASE_DELETED: { label: "Deleted", color: P.brick, icon: Trash2 },
-  CASE_VOIDED: { label: "Voided", color: "#6B7280", icon: Archive },
-  CASE_ACKNOWLEDGED: { label: "Signed", color: "#A78BFA", icon: Signature },
+  CASE_VOIDED: { label: "Voided", color: "var(--dim)", icon: Archive },
+  CASE_ACKNOWLEDGED: { label: "Signed", color: "var(--deep-accent)", icon: Signature },
   RTA_IMPORTED: { label: "RTA import", color: P.petrol, icon: UploadCloud },
   DCM_UPDATED: { label: "Matrix", color: P.amber, icon: Table2 },
   CONFIG_UPDATED: { label: "Config", color: P.sub, icon: Settings2 },
@@ -99,7 +99,7 @@ export default function AuditTrail() {
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <div
           className="flex items-center gap-2"
-          style={{ border: `1px solid ${P.line}`, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: "5px 12px", width: 240 }}
+          style={{ border: `1px solid ${P.line}`, background: "var(--well)", borderRadius: 999, padding: "5px 12px", width: 240 }}
         >
           <Search size={13} color={P.sub} />
           <input
@@ -132,7 +132,7 @@ export default function AuditTrail() {
               style={{
                 fontSize: 11, padding: "3px 10px", borderRadius: 999, cursor: "pointer",
                 border: `1px solid ${on ? meta.color : P.line}`,
-                color: on ? "#06121A" : meta.color,
+                color: on ? "var(--chip-on-text)" : meta.color,
                 background: on ? meta.color : "transparent",
               }}
             >

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Trash2, Scale, MessageSquarePlus, CheckSquare, Square, Hourglass, Paperclip, RotateCcw, Timer, FileText, Gavel } from "lucide-react";
 import { Pill, Toggle, TInput, BtnGhost, BtnPrimary, Label } from "./ui/index.jsx";
 import ReviewBox from "./ReviewBox.jsx";
-import { P, accColor, sevColor, STATUS_COLOR } from "../lib/tokens.js";
+import { P, accColor, sevColor, STATUS_COLOR, alpha } from "../lib/tokens.js";
 import { fmtMin, fmtDate, fmtStamp, days } from "../lib/format.js";
 import { todayStr } from "../lib/dates.js";
 import { statusOf, slaFor } from "../lib/engine.js";
@@ -88,7 +88,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, onR
       className="flex ao-glass"
       style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 8, overflow: "hidden", opacity: dimmed ? 0.7 : 1 }}
     >
-      <div style={{ width: 5, background: dimmed ? "#546468" : sev, flexShrink: 0 }} />
+      <div style={{ width: 5, background: dimmed ? "var(--dim)" : sev, flexShrink: 0 }} />
       <div className="p-3 flex-1 min-w-0">
         {/* Identity + status */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -139,7 +139,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, onR
 
         {/* Violation line */}
         <div className="flex items-center gap-2 flex-wrap mt-2">
-          <Pill color={dimmed ? "#8A9598" : sev} filled>
+          <Pill color={dimmed ? "var(--dim)" : sev} filled>
             {e.violation}
             {e.occurrence ? ` · №${e.occurrence}` : ""}
           </Pill>
@@ -208,7 +208,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, onR
         {capped && !dimmed && (
           <div
             className="mt-2 flex items-start gap-2 p-2"
-            style={{ background: "rgba(232,165,75,0.10)", border: `1px solid ${P.amber}55`, borderRadius: 6 }}
+            style={{ background: P.amberWash, border: `1px solid ${alpha(P.amber, 0.33)}`, borderRadius: 6 }}
           >
             <Scale size={13} color={P.amber} style={{ flexShrink: 0, marginTop: 2 }} />
             <span style={{ fontSize: 12, color: P.inkSoft }}>
@@ -235,7 +235,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, onR
         )}
 
         {e.appealState === "pending" && !voided && (
-          <div className="mt-2 p-2.5" style={{ background: "rgba(232,165,75,0.10)", border: `1px solid ${P.amber}55`, borderRadius: 8 }}>
+          <div className="mt-2 p-2.5" style={{ background: P.amberWash, border: `1px solid ${alpha(P.amber, 0.33)}`, borderRadius: 8 }}>
             <div className="flex items-center gap-2">
               <Gavel size={13} color={P.amber} style={{ flexShrink: 0 }} />
               <span className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 11.5, color: P.amber }}>
@@ -338,7 +338,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, onR
 
         {/* HR execution gate */}
         {!voided && e.stage === "active" && e.hrNeeded && !e.hrConfirmed && e.opsConfirmed && can(me, "hr") && (
-          <div className="mt-3 p-3" style={{ background: "rgba(236,111,93,0.10)", border: `1px dashed ${P.brick}66`, borderRadius: 8 }}>
+          <div className="mt-3 p-3" style={{ background: P.brickWash, border: `1px dashed ${alpha(P.brick, 0.4)}`, borderRadius: 8 }}>
             <Label>HR case reference (required to complete)</Label>
             <div className="flex gap-2 mt-1 flex-wrap">
               <TInput
@@ -369,7 +369,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, onR
                 <select
                   value={e.assignee || ""}
                   onChange={(ev) => onPatch({ ...e, assignee: ev.target.value })}
-                  style={{ fontSize: 12, color: P.ink, border: `1px solid ${P.line}`, borderRadius: 6, padding: "2px 6px", background: "rgba(255,255,255,0.05)" }}
+                  style={{ fontSize: 12, color: P.ink, border: `1px solid ${P.line}`, borderRadius: 6, padding: "2px 6px", background: "var(--well)" }}
                 >
                   <option value="">Unassigned</option>
                   {tls.map((t) => (

@@ -1,17 +1,179 @@
 @import "tailwindcss";
 
 /* ── Design tokens ────────────────────────────────────────────────────────
-   One source of truth for the Signal palette and a fluid type scale. The
-   staff views still read colours from lib/tokens.js (inline styles); these
-   custom properties back the CSS-driven surfaces and the fluid headings, so
-   the identity is variable-driven and dark-mode native. */
-:root {
+   THE theme. lib/tokens.js resolves every colour to one of these custom
+   properties, so all 376 inline style reads across the workspace re-theme
+   automatically — swapping [data-theme] is the whole light/dark switch.
+
+   Colour discipline, deliberately enforced here:
+     · the WARM ramp (amber → coral → pink) is reserved for SEVERITY, so a
+       warm chip always means "how bad", never "which account";
+     · accounts get a COOL identity family, separated by hue *and* lightness;
+     · the violet Signal means "brand / primary action / pending" and nothing
+       else. Identity colours stay less saturated than semantic ones, so the
+       most vivid thing on screen is always the most important. */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --paper: transparent; /* the ink aurora shows through */
+  --card: rgba(255, 255, 255, 0.045);
+  --deep: rgba(7, 10, 18, 0.74);
+  --mist: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 255, 255, 0.09);
+
+  /* Text */
+  --ink: #f4f7f9;
+  --ink-soft: #b7c3cc;
+  --sub: #8b9aa6;
+
+  /* The Signal */
   --signal: #8b5cf6;
   --signal-strong: #6d28d9;
   --signal-soft: rgba(139, 92, 246, 0.14);
-  --ink: #e2e8f0;
-  --paper: #05070c;
 
+  /* Semantic accents */
+  --amber: #f5a623;
+  --brick: #f26d5f;
+  --green: #34d399;
+
+  /* Tinted washes — the callout backgrounds, theme-aware */
+  --amber-wash: rgba(245, 166, 35, 0.1);
+  --brick-wash: rgba(242, 109, 95, 0.1);
+  --green-wash: rgba(52, 211, 153, 0.12);
+  --signal-wash: rgba(139, 92, 246, 0.1);
+
+  /* Severity — the warm ramp, reserved */
+  --sev-minor: #8fa3a8;
+  --sev-moderate: #f5a623;
+  --sev-serious: #f26d5f;
+  --sev-zero: #f472b6;
+
+  /* Accounts — cool identity family, separated by hue AND lightness */
+  --acc-1: #2dd4bf; /* bright teal   */
+  --acc-2: #3b82f6; /* mid blue      */
+  --acc-3: #7dd3fc; /* pale sky      */
+
+  /* Elevation — one scale, so panels sit in a real z-order */
+  --elev-1: 0 1px 2px rgba(2, 6, 23, 0.4);
+  --elev-2: 0 8px 32px rgba(2, 6, 23, 0.4);
+  --elev-3: 0 14px 40px rgba(2, 6, 23, 0.55);
+  --glass-blur: 18px;
+  --sheen: rgba(255, 255, 255, 0.28);
+  --option-bg: #0d1a24;
+  --scroll-thumb: rgba(255, 255, 255, 0.14);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.24);
+
+  /* Header band — sits over the aurora, so it keeps its own contrast set */
+  --hdr-text: #c9d6d4;
+  --hdr-line: #3a4155;
+  --hdr-strong: #f2f6f5;
+  --chip-on-bg: #e9f1f0;
+  --chip-on-text: #06121a;
+
+  /* Deep panels (live verdict, agent profile header) */
+  --deep-ink: #f2f6f5;
+  --deep-ink-soft: #b9c9c7;
+  --deep-accent: #b9afe6;
+  --deep-well: rgba(255, 255, 255, 0.07);
+  --deep-line: #3a3555;
+  --cap-bg: #3a2a16;
+  --cap-text: #f0d6a8;
+  --zt-bg: #3a1f1a;
+  --zt-bg-strong: #2a1614;
+
+  --disabled: #6e8287;
+  --dim: #8a9598;
+  --well: rgba(255, 255, 255, 0.05);
+  --coral-soft: #e8a79c;
+  --coral-text: #f0c4bc;
+  --coral-dim: #e0b5ad;
+  --overlay: rgba(13, 26, 36, 0.97);
+  --hdr-bg: rgba(6, 12, 20, 0.65);
+  --toast-bg: rgba(10, 24, 22, 0.85);
+  --grid-line: rgba(255, 255, 255, 0.07);
+  --logo-ring: rgba(255, 255, 255, 0.22);
+  --logo-seat: rgba(255, 255, 255, 0.35);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --paper: transparent;
+  --card: rgba(255, 255, 255, 0.78);
+  --deep: rgba(255, 255, 255, 0.9);
+  --mist: rgba(15, 23, 42, 0.05);
+  --line: rgba(15, 23, 42, 0.12);
+
+  --ink: #0f172a;
+  --ink-soft: #334155;
+  --sub: #5b6b7f;
+
+  /* Darkened so the Signal keeps its contrast on white */
+  --signal: #7c3aed;
+  --signal-strong: #5b21b6;
+  --signal-soft: rgba(124, 58, 237, 0.12);
+
+  --amber: #b45309;
+  --brick: #dc2626;
+  --green: #047857;
+
+  --amber-wash: rgba(180, 83, 9, 0.09);
+  --brick-wash: rgba(220, 38, 38, 0.08);
+  --green-wash: rgba(4, 120, 87, 0.1);
+  --signal-wash: rgba(124, 58, 237, 0.09);
+
+  --sev-minor: #64748b;
+  --sev-moderate: #b45309;
+  --sev-serious: #dc2626;
+  --sev-zero: #be185d;
+
+  --acc-1: #0f766e;
+  --acc-2: #1d4ed8;
+  --acc-3: #0369a1;
+
+  --elev-1: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --elev-2: 0 8px 28px rgba(15, 23, 42, 0.1);
+  --elev-3: 0 16px 44px rgba(15, 23, 42, 0.16);
+  --glass-blur: 16px;
+  --sheen: rgba(255, 255, 255, 0.6);
+  --option-bg: #ffffff;
+  --scroll-thumb: rgba(15, 23, 42, 0.18);
+  --scroll-thumb-hover: rgba(15, 23, 42, 0.3);
+
+  --hdr-text: #334155;
+  --hdr-line: rgba(15, 23, 42, 0.16);
+  --hdr-strong: #0f172a;
+  --chip-on-bg: #0f172a;
+  --chip-on-text: #ffffff;
+
+  --deep-ink: #0f172a;
+  --deep-ink-soft: #334155;
+  --deep-accent: #6d28d9;
+  --deep-well: rgba(15, 23, 42, 0.05);
+  --deep-line: rgba(15, 23, 42, 0.12);
+  --cap-bg: rgba(180, 83, 9, 0.12);
+  --cap-text: #92400e;
+  --zt-bg: rgba(220, 38, 38, 0.1);
+  --zt-bg-strong: rgba(220, 38, 38, 0.14);
+
+  --disabled: #94a3b8;
+  --dim: #64748b;
+  --well: rgba(15, 23, 42, 0.04);
+  --coral-soft: #b91c1c;
+  --coral-text: #991b1b;
+  --coral-dim: #b45309;
+  --overlay: rgba(255, 255, 255, 0.98);
+  --hdr-bg: rgba(255, 255, 255, 0.72);
+  --toast-bg: rgba(255, 255, 255, 0.94);
+  --grid-line: rgba(15, 23, 42, 0.08);
+  --logo-ring: rgba(15, 23, 42, 0.22);
+  --logo-seat: rgba(15, 23, 42, 0.38);
+}
+
+:root {
   /* Fluid type — clamp(min, fluid, max): scales smoothly with the viewport
      so the display figures read as premium on a wide screen without breaking
      small ones. */
@@ -32,14 +194,31 @@
 
 body {
   min-height: 100vh;
-  background-color: #05070c;
-  background-image:
+  background-color: var(--bg-base);
+  background-image: var(--aurora);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  transition: background-color 0.4s ease, color 0.3s ease;
+}
+
+/* The aurora is part of the theme: a violet dusk on ink, a soft violet
+   daylight wash on porcelain. */
+:root,
+[data-theme="dark"] {
+  --bg-base: #05070c;
+  --aurora:
     radial-gradient(56rem 38rem at 14% -12%, rgba(139, 92, 246, 0.16), transparent 60%),
     radial-gradient(48rem 34rem at 102% 4%, rgba(109, 40, 217, 0.14), transparent 55%),
     radial-gradient(46rem 36rem at 50% 118%, rgba(139, 92, 246, 0.1), transparent 60%);
-  background-attachment: fixed;
-  color: #e2e8f0;
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+[data-theme="light"] {
+  --bg-base: #f6f7fb;
+  --aurora:
+    radial-gradient(56rem 38rem at 14% -12%, rgba(124, 58, 237, 0.1), transparent 62%),
+    radial-gradient(48rem 34rem at 102% 4%, rgba(37, 99, 235, 0.08), transparent 58%),
+    radial-gradient(46rem 36rem at 50% 118%, rgba(124, 58, 237, 0.07), transparent 60%);
 }
 
 /* Hero elements get a 1px top edge of Signal light fading to nothing —
@@ -55,7 +234,7 @@ body {
   right: 8%;
   height: 1px;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.65), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--signal) 65%, transparent), transparent);
   pointer-events: none;
 }
 
@@ -64,9 +243,9 @@ body {
    what inline styles can't: backdrop blur, keyframe entrances, hover lifts. */
 
 .ao-glass {
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow: 0 8px 32px rgba(2, 6, 23, 0.4);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--elev-2);
 }
 
 @keyframes aoRise {
@@ -104,7 +283,7 @@ body {
 .ao-pulse { animation: aoPulse 2.2s ease-in-out infinite; }
 
 .ao-lift { transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.2s ease, background-color 0.2s ease; }
-.ao-lift:hover { transform: translateY(-2px); box-shadow: 0 14px 40px rgba(2, 6, 23, 0.55); }
+.ao-lift:hover { transform: translateY(-2px); box-shadow: var(--elev-3); }
 
 /* Every interactive control gets a soft press + smooth state changes. */
 button {
@@ -125,7 +304,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
   position: absolute;
   inset: 0;
   transform: translateX(-120%) skewX(-18deg);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  background: linear-gradient(90deg, transparent, var(--sheen), transparent);
   transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
@@ -133,7 +312,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .ao-sheen:focus-visible::after { transform: translateX(120%) skewX(-18deg); }
 
 /* Signal glow — hover halo in the brand violet (or a passed --glow colour). */
-.ao-glow { --glow: rgba(139, 92, 246, 0.75); }
+.ao-glow { --glow: color-mix(in srgb, var(--signal) 75%, transparent); }
 .ao-glow:hover:not(:disabled) {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow) 45%, transparent),
     0 8px 26px -10px var(--glow);
@@ -143,7 +322,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 /* Attention pulse — a breathing ring for counts that need a human. Set
    --halo to tint it (defaults to the Signal violet). */
 @keyframes aoHalo {
-  0%, 100% { box-shadow: 0 0 0 0 var(--halo, rgba(139, 92, 246, 0.5)); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--halo, color-mix(in srgb, var(--signal) 50%, transparent)); }
   50% { box-shadow: 0 0 0 5px transparent; }
 }
 .ao-halo { animation: aoHalo 2.4s ease-out infinite; }
@@ -187,18 +366,17 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .ao-nav:hover::before { height: 38%; }
 .ao-nav[data-active="true"]:hover::before { height: 62%; }
 
-/* Native form controls (date/time pickers, dropdowns) render dark. */
-.ao-body { color-scheme: dark; }
+/* Native form controls (date/time pickers, dropdowns) follow the theme. */
 .ao-body select option {
-  background: #0d1a24;
-  color: #e2e8f0;
+  background: var(--option-bg);
+  color: var(--ink);
 }
 
 /* Thin dark scrollbars to match the glass. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); border: 2px solid transparent; background-clip: content-box; }
 
 /* ── Legacy type helpers (the ported staff views still use these) ────────── */
 
@@ -218,7 +396,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 .ao-body :focus-visible {
-  outline: 2px solid rgba(139, 92, 246, 0.65);
+  outline: 2px solid color-mix(in srgb, var(--signal) 70%, transparent);
   outline-offset: 2px;
 }
 

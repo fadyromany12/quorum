@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { ShieldCheck, ArrowUpRight, Archive } from "lucide-react";
 import { Field, TSelect, TArea, Label, BtnPrimary, BtnGhost } from "./ui/index.jsx";
-import { P } from "../lib/tokens.js";
+import { P, alpha } from "../lib/tokens.js";
 
 export const MIN_COMMENT = 15;
 
@@ -27,7 +27,7 @@ export default function ReviewBox({ e, tls, onDecide }) {
       : "";
 
   return (
-    <div className="mt-3 p-3" style={{ background: "rgba(139,92,246,0.10)", border: `1px dashed ${P.petrol}66`, borderRadius: 8 }}>
+    <div className="mt-3 p-3" style={{ background: P.signalWash, border: `1px dashed ${alpha(P.petrol, 0.4)}`, borderRadius: 8 }}>
       <div className="ao-disp uppercase tracking-wide font-semibold flex items-center gap-1.5" style={{ fontSize: 12, color: P.petrol }}>
         <ShieldCheck size={13} />
         Manager review required
@@ -45,7 +45,7 @@ export default function ReviewBox({ e, tls, onDecide }) {
           <TSelect
             value={assignee}
             onChange={(ev) => setAssignee(ev.target.value)}
-            style={{ borderColor: assignee ? P.line : `${P.amber}99` }}
+            style={{ borderColor: assignee ? P.line : `${alpha(P.amber, 0.6)}` }}
           >
             <option value="">Unassigned</option>
             {tls.map((t) => (
@@ -67,7 +67,7 @@ export default function ReviewBox({ e, tls, onDecide }) {
             placeholder="What actually happened, and why this is escalated or dismissed…"
             value={comment}
             onChange={(ev) => setComment(ev.target.value)}
-            style={{ borderColor: short && text.length ? `${P.amber}99` : P.line }}
+            style={{ borderColor: short && text.length ? `${alpha(P.amber, 0.6)}` : P.line }}
           />
         </div>
       </div>

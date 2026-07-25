@@ -8,9 +8,9 @@ import { P, sevColor } from "../lib/tokens.js";
 import { LAW_CITATION, PER_INCIDENT_CAP, PER_MONTH_CAP } from "../lib/constants.js";
 import { fmtDateLong, days } from "../lib/format.js";
 
-const INK_TEXT = "#F2F6F5";
-const INK_SOFT = "#B9C9C7";
-const INK_ACCENT = "#B9AFE6";
+const INK_TEXT = "var(--hdr-strong)";
+const INK_SOFT = "var(--deep-ink-soft)";
+const INK_ACCENT = "var(--deep-accent)";
 
 export default function VerdictPanel({ verdict }) {
   if (!verdict) return null;
@@ -72,7 +72,7 @@ function DeductionBar({ cap, capped }) {
   return (
     <div
       className="mt-3 p-3 flex items-center gap-3 flex-wrap"
-      style={{ background: "rgba(255,255,255,0.07)", borderRadius: 6, border: `1px solid ${capped ? P.amber : "#3A3555"}` }}
+      style={{ background: "var(--deep-well)", borderRadius: 6, border: `1px solid ${capped ? P.amber : "var(--deep-line)"}` }}
     >
       <Scale size={16} color={capped ? P.amber : INK_ACCENT} />
       <div>
@@ -120,10 +120,10 @@ function LawStrip({ capped, cap }) {
   return (
     <div
       className="px-4 py-2 flex items-center gap-2"
-      style={{ background: capped ? "#3A2A16" : "#1D1936", borderTop: `1px solid ${capped ? P.amber : "#3A3555"}` }}
+      style={{ background: capped ? "var(--cap-bg)" : "var(--deep-well)", borderTop: `1px solid ${capped ? P.amber : "var(--deep-line)"}` }}
     >
       <Scale size={13} color={capped ? P.amber : INK_ACCENT} />
-      <span style={{ fontSize: 11.5, color: capped ? "#F0D6A8" : INK_ACCENT }}>
+      <span style={{ fontSize: 11.5, color: capped ? "var(--cap-text)" : INK_ACCENT }}>
         {LAW_CITATION} — deductions capped at {PER_INCIDENT_CAP} days per incident and {PER_MONTH_CAP} days per calendar
         month.
         {capped && ` This incident is limited to ${days(cap.applied)}; ${days(cap.waived)} cannot be collected.`}
@@ -137,14 +137,14 @@ function InvestigationBanner({ severity }) {
   return (
     <div
       className="px-4 py-3 flex items-start gap-2"
-      style={{ background: zt ? "#2A1614" : "#3A1F1A", borderTop: `1px solid ${P.brick}` }}
+      style={{ background: zt ? "var(--zt-bg-strong)" : "var(--zt-bg)", borderTop: `1px solid ${P.brick}` }}
     >
-      <ShieldAlert size={16} color="#E8A79C" style={{ flexShrink: 0, marginTop: 1 }} />
+      <ShieldAlert size={16} color="var(--coral-soft)" style={{ flexShrink: 0, marginTop: 1 }} />
       <div>
-        <div className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 12, color: "#F0C4BC" }}>
+        <div className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 12, color: "var(--coral-text)" }}>
           Investigation protocols active
         </div>
-        <div className="mt-1" style={{ fontSize: 12, color: "#E0B5AD", lineHeight: 1.5 }}>
+        <div className="mt-1" style={{ fontSize: 12, color: "var(--coral-dim)", lineHeight: 1.5 }}>
           The employee must be notified in writing and holds the right to a <b>3–5 working day</b> written response
           window and to have a colleague present during review. No deduction or termination may be executed before the
           investigation concludes.

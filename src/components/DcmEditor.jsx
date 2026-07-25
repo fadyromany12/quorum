@@ -51,7 +51,7 @@ export default function DcmEditor({ dcm, onChange }) {
       <div className="flex items-center gap-2 mt-3" style={{ maxWidth: 320 }}>
         <div
           className="flex items-center gap-2 flex-1"
-          style={{ border: `1px solid ${P.line}`, background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: "6px 10px" }}
+          style={{ border: `1px solid ${P.line}`, background: "var(--well)", borderRadius: 6, padding: "6px 10px" }}
         >
           <Search size={14} color={P.sub} />
           <input

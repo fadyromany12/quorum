@@ -6,7 +6,7 @@
 import { useMemo } from "react";
 import { PhoneCall, UserX, CalendarX2, Users, TriangleAlert, Scale, TrendingUp, TrendingDown, Minus, CalendarClock, Timer } from "lucide-react";
 import { Card, Pill, Muted } from "./ui/index.jsx";
-import { P, SEV_ORDER, accColor, sevColor } from "../lib/tokens.js";
+import { P, SEV_ORDER, accColor, sevColor, alpha } from "../lib/tokens.js";
 import { fmtMin, fmtDate, days } from "../lib/format.js";
 import { countsForDiscipline, slaFor } from "../lib/engine.js";
 import { todayStr, addDays, daysBetween } from "../lib/dates.js";
@@ -181,7 +181,7 @@ export default function Dashboard({ entries, accounts, escalations }) {
                 <div
                   key={i}
                   className="flex items-start gap-2 p-2.5 ao-lift"
-                  style={{ background: "rgba(232,165,75,0.10)", border: `1px solid ${c}33`, borderLeft: `4px solid ${c}`, borderRadius: 6 }}
+                  style={{ background: P.amberWash, border: `1px solid ${alpha(c, 0.2)}`, borderLeft: `4px solid ${c}`, borderRadius: 6 }}
                 >
                   <Icon size={15} color={c} style={{ flexShrink: 0, marginTop: 2 }} />
                   <div className="min-w-0">
@@ -458,7 +458,7 @@ function Sparkline({ points, color }) {
   const d = points.map((val, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(val).toFixed(1)}`).join(" ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 26, display: "block" }} role="img" aria-label="8-week trend">
-      <line x1={pad} x2={W - pad} y1={H - pad} y2={H - pad} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+      <line x1={pad} x2={W - pad} y1={H - pad} y2={H - pad} stroke="var(--grid-line)" strokeWidth="1" />
       <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" opacity="0.9" />
       <circle cx={x(n - 1)} cy={y(points[n - 1])} r="2.2" fill={color} />
     </svg>
@@ -484,7 +484,7 @@ function TrendBars({ weekly }) {
     <div style={{ overflowX: "auto" }}>
       <svg viewBox={`0 0 ${W} ${H + 30}`} style={{ width: "100%", minWidth: 480 }} role="img" aria-label="Cases per week, last 8 weeks">
         {[0.25, 0.5, 0.75].map((f) => (
-          <line key={f} x1={pad} x2={W - pad} y1={H - H * f} y2={H - H * f} stroke="rgba(255,255,255,0.07)" strokeWidth="1" />
+          <line key={f} x1={pad} x2={W - pad} y1={H - H * f} y2={H - H * f} stroke="var(--deep-well)" strokeWidth="1" />
         ))}
         {weekly.map((w, i) => {
           const scale = (H - 16) / max;
@@ -507,11 +507,11 @@ function TrendBars({ weekly }) {
                 </rect>
               )}
               {w.count > 0 && (
-                <text x={x + bw * 0.32} y={H - discH - leaveH - 6} textAnchor="middle" className="ao-mono" style={{ fontSize: 11, fill: isCurrent ? "#F2F6F5" : "#8B9AA6" }}>
+                <text x={x + bw * 0.32} y={H - discH - leaveH - 6} textAnchor="middle" className="ao-mono" style={{ fontSize: 11, fill: isCurrent ? "var(--hdr-strong)" : "var(--sub)" }}>
                   {w.count}
                 </text>
               )}
-              <text x={x + bw * 0.32} y={H + 18} textAnchor="middle" className="ao-mono" style={{ fontSize: 10, fill: "#8B9AA6" }}>
+              <text x={x + bw * 0.32} y={H + 18} textAnchor="middle" className="ao-mono" style={{ fontSize: 10, fill: "var(--sub)" }}>
                 {fmtDate(w.end)}
               </text>
             </g>
