@@ -9,6 +9,7 @@
    workspace keeps its proven light look for now, painted over the dark shell. */
 
 import { useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -97,6 +98,17 @@ export default function Workspace({ initial, me, themeIntent }) {
 
   const allowedTabs = TABS_FOR[me.role] || [];
   const [tab, setTab] = useState(allowedTabs[0] || "dashboard");
+
+  /* Tab changes cross-fade through the View Transitions API where it exists;
+     browsers without it just get the instant switch they always had. */
+  const goTab = (next) => {
+    if (next === tab) return;
+    if (typeof document !== "undefined" && document.startViewTransition) {
+      document.startViewTransition(() => flushSync(() => setTab(next)));
+    } else {
+      setTab(next);
+    }
+  };
   const [acc, setAcc] = useState("All");
   const [range, setRange] = useState("all"); // all | 30 | month
   const [showForm, setShowForm] = useState(false);
@@ -286,7 +298,7 @@ export default function Workspace({ initial, me, themeIntent }) {
         <nav className="hidden md:block py-4" style={{ width: 190, flexShrink: 0, position: "sticky", top: 118 }}>
           <div className="grid gap-1">
             {nav.map((n) => (
-              <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => setTab(n.id)} />
+              <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
             ))}
           </div>
           {can(me, "log") && (
@@ -294,7 +306,7 @@ export default function Workspace({ initial, me, themeIntent }) {
               <BtnPrimary
                 icon={Plus}
                 onClick={() => {
-                  setTab("log");
+                  goTab("log");
                   setShowForm(true);
                 }}
               >
@@ -309,7 +321,7 @@ export default function Workspace({ initial, me, themeIntent }) {
           {/* Mobile nav */}
           <div className="md:hidden flex gap-2 overflow-x-auto mt-4 pb-1">
             {nav.map((n) => (
-              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => setTab(n.id)} />
+              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
             ))}
           </div>
 
@@ -323,27 +335,27 @@ export default function Workspace({ initial, me, themeIntent }) {
                 value={pendingReview.length}
                 icon={Inbox}
                 tone={pendingReview.length ? P.petrol : P.green}
-                onClick={allowedTabs.includes("triage") ? () => setTab("triage") : undefined}
+                onClick={allowedTabs.includes("triage") ? () => goTab("triage") : undefined}
               />
               <KPI
                 label="Active escalations"
                 value={activeEscalations}
                 icon={TriangleAlert}
                 tone={activeEscalations ? P.amber : P.green}
-                onClick={allowedTabs.includes("approvals") ? () => setTab("approvals") : undefined}
+                onClick={allowedTabs.includes("approvals") ? () => goTab("approvals") : undefined}
               />
               <KPI label="Deduction pool" value={deductionPool} format={(n) => `${Math.round(n)}d`} icon={Scale} tone={deductionPool ? P.ink : P.green} />
             </div>
           )}
 
           {/* key={tab}: remount on tab change so the entrance animation replays */}
-          <div className="mt-4 ao-rise" key={tab}>
+          <div className="mt-4 ao-rise" key={tab} style={{ viewTransitionName: "panel" }}>
             {showEmpty ? (
               <EmptyState
                 canLog={can(me, "log")}
                 canSamples={can(me, "admin")}
                 onLog={() => {
-                  setTab("log");
+                  goTab("log");
                   setShowForm(true);
                 }}
                 onSamples={loadSamples}

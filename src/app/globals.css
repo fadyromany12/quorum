@@ -221,6 +221,53 @@ body {
     radial-gradient(46rem 36rem at 50% 118%, rgba(124, 58, 237, 0.07), transparent 60%);
 }
 
+/* A whisper of grain over the aurora. Stops the large gradients from banding
+   on cheap panels and gives the glass something to sit on. Inline SVG noise —
+   no image request, no layout cost, never interactive. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+:root,
+[data-theme="dark"] { --grain-opacity: 0.035; }
+[data-theme="light"] { --grain-opacity: 0.022; }
+
+/* Theme changes cross-fade rather than snap. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Tab changes: the outgoing panel fades back, the incoming one rises. */
+::view-transition-old(panel) {
+  animation: aoFadeOut 0.16s ease-in both;
+}
+::view-transition-new(panel) {
+  animation: aoRise 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes aoFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+
+/* Skeletons — a light sweep across a placeholder while data lands. */
+@keyframes aoShimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.ao-skeleton {
+  border-radius: 8px;
+  background-image: linear-gradient(90deg, var(--mist) 25%, var(--well) 37%, var(--mist) 63%);
+  background-size: 200% 100%;
+  animation: aoShimmer 1.4s linear infinite;
+}
+
 /* Hero elements get a 1px top edge of Signal light fading to nothing —
    the quiet Linear-style detail that separates hero cards from panels. */
 .gradient-hairline {

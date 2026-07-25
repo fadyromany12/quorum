@@ -33,9 +33,15 @@ export default function ThemeToggle({ initial = DEFAULT_THEME }: { initial?: str
 
   const cycle = () => {
     const next = NEXT[intent as keyof typeof NEXT] ?? "dark";
-    setIntent(next);
-    document.cookie = `theme=${next}; path=/; max-age=31536000; samesite=lax`;
-    paint(next);
+    const apply = () => {
+      setIntent(next);
+      document.cookie = `theme=${next}; path=/; max-age=31536000; samesite=lax`;
+      paint(next);
+    };
+    // Cross-fade the whole page between themes where the browser supports it.
+    const d = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    if (d.startViewTransition) d.startViewTransition(apply);
+    else apply();
   };
 
   const Icon = ICON[intent as keyof typeof ICON] ?? Moon;

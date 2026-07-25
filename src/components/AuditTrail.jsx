@@ -147,7 +147,19 @@ export default function AuditTrail() {
           {error}
         </div>
       )}
-      {rows === null && <Muted>Loading the trail…</Muted>}
+      {rows === null && (
+        <div className="grid gap-1.5" aria-busy="true" aria-label="Loading the audit trail">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="flex items-start gap-3 p-2.5" style={{ background: P.mist, borderRadius: 10 }}>
+              <div className="ao-skeleton" style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0, marginTop: 2 }} />
+              <div className="flex-1 grid gap-1.5">
+                <div className="ao-skeleton" style={{ height: 11, width: `${38 + ((i * 13) % 26)}%` }} />
+                <div className="ao-skeleton" style={{ height: 10, width: `${62 + ((i * 17) % 30)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {rows !== null && !error && visible.length === 0 && <Muted>No events match.</Muted>}
 
       <div className="grid gap-1.5">
