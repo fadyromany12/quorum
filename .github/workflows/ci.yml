@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One in-flight run per branch; a new push cancels the previous run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # The rules engine runs unchanged on server rows, so the same Postgres the
+    # app uses backs the e2e suite. Port 5544 + database name mirror the local
+    # dev cluster (scripts/devdb.mjs) that test/e2e.mjs targets by default.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: absence_ops
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5544:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5544/absence_ops
+      AUTH_SECRET: ci-only-secret-not-used-in-production
+      AUTH_TRUST_HOST: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # psql is what test/e2e.mjs shells out to for its DB assertions.
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Unit tests (rules engine — no DB needed)
+        run: npm test
+
+      - name: Push schema
+        run: npm run db:push
+
+      - name: Seed demo baseline
+        run: npm run db:seed
+
+      - name: Build
+        run: npm run build
+
+      - name: Start server
+        run: |
+          npm start &
+          echo $! > .server.pid
+          # Wait for the login page to answer before driving the e2e suite.
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/login; then
+              echo "server up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "server did not start in time"; exit 1
+
+      - name: E2E acceptance (HTTP + DB)
+        run: npm run test:e2e
+
+      - name: Stop server
+        if: always()
+        run: '[ -f .server.pid ] && kill "$(cat .server.pid)" || true'

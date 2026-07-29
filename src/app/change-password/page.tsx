@@ -9,6 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 import { SessionProvider } from "next-auth/react";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { GlassCard, GlassButton, GlassInput, GlassLabel } from "@/components/glass";
+import { passwordProblem } from "@/lib/auth.js";
 
 function ChangePasswordInner() {
   const { data: session, update } = useSession();
@@ -19,6 +20,8 @@ function ChangePasswordInner() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const problem = passwordProblem(pw.trim());
+    if (problem) return setError(problem);
     if (pw.trim() !== confirm.trim()) return setError("The two entries don't match.");
     setBusy(true);
     setError("");
@@ -50,8 +53,9 @@ function ChangePasswordInner() {
               password — choose your own before continuing.
             </p>
             <div>
-              <GlassLabel>New password (min 8 characters)</GlassLabel>
+              <GlassLabel>New password</GlassLabel>
               <GlassInput type="password" autoFocus autoComplete="new-password" value={pw} onChange={(e) => { setPw(e.target.value); setError(""); }} />
+              <p className="mt-1 text-[11px] text-slate-500">At least 8 characters, with an uppercase letter, a lowercase letter and a number.</p>
             </div>
             <div>
               <GlassLabel>Repeat it</GlassLabel>

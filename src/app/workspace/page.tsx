@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { loadEntries } from "@/lib/db";
 import { publicUser } from "@/lib/users-public";
 import Workspace from "@/components/Workspace.jsx";
+import { getThemeIntent } from "@/lib/theme-server";
 
 export const dynamic = "force-dynamic";
 
@@ -38,5 +39,7 @@ export default async function WorkspacePage() {
     role: session.user.role,
   };
 
-  return <Workspace initial={initial} me={me} />;
+  const themeIntent = await getThemeIntent();
+
+  return <Workspace initial={initial} me={me} themeIntent={themeIntent} />;
 }

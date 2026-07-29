@@ -3,7 +3,7 @@
 
 import bcrypt from "bcryptjs";
 
-export { DEFAULT_PASSWORD, MIN_PASSWORD } from "./auth.js";
+export { DEFAULT_PASSWORD, MIN_PASSWORD, passwordProblem } from "./auth.js";
 
 export const hashPassword = (password: string) => bcrypt.hashSync(password, 10);
 

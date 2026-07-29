@@ -10,8 +10,9 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Signature, ShieldAlert, FileWarning, ChevronRight } from "lucide-react";
+import { Signature, ShieldAlert, FileWarning, ChevronRight, FileText, Gavel } from "lucide-react";
 import { GlassCard, GlassModal, GlassButton, GlassInput, GlassLabel, GlassBadge } from "@/components/glass";
+import { t } from "@/lib/i18n.js";
 
 export type PendingAck = {
   id: string;
@@ -22,6 +23,7 @@ export type PendingAck = {
   severity: string | null;
   deductionApplied: number;
   investigation: boolean;
+  appealState: string;
 };
 
 const SEV_TONE: Record<string, "neutral" | "amber" | "rose" | "violet"> = {
@@ -33,13 +35,16 @@ const SEV_TONE: Record<string, "neutral" | "amber" | "rose" | "violet"> = {
 
 const ordinal = (n: number) => `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
 
-export default function AckCenter({ pending }: { pending: PendingAck[] }) {
+export default function AckCenter({ pending, locale = "en" }: { pending: PendingAck[]; locale?: string }) {
   const router = useRouter();
   const [active, setActive] = useState<PendingAck | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [signature, setSignature] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [appealOpen, setAppealOpen] = useState(false);
+  const [appealReason, setAppealReason] = useState("");
+  const [appealState, setAppealState] = useState("");
 
   if (!pending.length) return null;
 
@@ -48,6 +53,26 @@ export default function AckCenter({ pending }: { pending: PendingAck[] }) {
     setAccepted(false);
     setSignature("");
     setError("");
+    setAppealOpen(false);
+    setAppealReason("");
+    setAppealState(c.appealState || "");
+  };
+
+  const submitAppeal = async () => {
+    if (!active || appealReason.trim().length < 10) return;
+    setBusy(true);
+    setError("");
+    const res = await fetch("/api/cases/appeal", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ caseId: active.id, reason: appealReason.trim() }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setError(body.error || "Could not submit the appeal.");
+    setAppealState("pending");
+    setAppealOpen(false);
+    router.refresh();
   };
 
   const close = () => {
@@ -86,12 +111,9 @@ export default function AckCenter({ pending }: { pending: PendingAck[] }) {
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-[13px] font-bold uppercase tracking-wider text-violet-200">
-              Pending acknowledgements — {pending.length}
+              {t(locale, "portal.pendingAcks")} — {pending.length}
             </h2>
-            <p className="text-[12.5px] text-slate-400">
-              HR has finalized disciplinary action{pending.length === 1 ? "" : "s"} on your file. Review and sign each
-              one — this replaces the paper acknowledgement form.
-            </p>
+            <p className="text-[12.5px] text-slate-400">{t(locale, "portal.pendingBlurb")}</p>
           </div>
         </div>
 
@@ -111,7 +133,7 @@ export default function AckCenter({ pending }: { pending: PendingAck[] }) {
               {c.severity && <GlassBadge tone={SEV_TONE[c.severity] || "neutral"}>{c.severity}</GlassBadge>}
               <span className="flex-1" />
               <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-violet-300">
-                Review &amp; sign <ChevronRight size={13} />
+                {t(locale, "portal.reviewSign")} <ChevronRight size={13} className="rtl:rotate-180" />
               </span>
             </button>
           ))}
@@ -150,6 +172,57 @@ export default function AckCenter({ pending }: { pending: PendingAck[] }) {
                     receipt — it does not waive those rights.
                   </span>
                 </div>
+              )}
+            </div>
+
+            {/* The formal letter, for the record */}
+            <a
+              href={`/api/cases/${active.id}/letter`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-violet-300 hover:text-violet-200"
+            >
+              <FileText size={14} />
+              {t(locale, "portal.downloadLetter")}
+            </a>
+
+            {/* Right to contest */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+              {appealState === "pending" ? (
+                <p className="inline-flex items-center gap-2 text-[12.5px] text-amber-300">
+                  <Gavel size={14} /> {t(locale, "portal.appealPending")}
+                </p>
+              ) : appealState ? (
+                <p className="inline-flex items-center gap-2 text-[12.5px] text-slate-300">
+                  <Gavel size={14} /> Appeal {appealState === "overturned" ? "granted — this case was overturned" : "reviewed — the decision stands"}.
+                </p>
+              ) : appealOpen ? (
+                <div className="grid gap-2">
+                  <GlassLabel>{t(locale, "portal.appealPrompt")}</GlassLabel>
+                  <textarea
+                    value={appealReason}
+                    onChange={(e) => setAppealReason(e.target.value)}
+                    rows={3}
+                    placeholder="Explain what you believe is incorrect (at least 10 characters)…"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-[13px] text-slate-100 outline-none focus:border-amber-400/40"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <GlassButton type="button" variant="ghost" onClick={() => setAppealOpen(false)} disabled={busy}>
+                      Cancel
+                    </GlassButton>
+                    <GlassButton type="button" variant="primary" onClick={submitAppeal} loading={busy} disabled={appealReason.trim().length < 10}>
+                      <Gavel size={14} /> {t(locale, "portal.appealSubmit")}
+                    </GlassButton>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAppealOpen(true)}
+                  className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-amber-300 hover:text-amber-200"
+                >
+                  <Gavel size={14} /> I disagree — appeal this decision
+                </button>
               )}
             </div>
 

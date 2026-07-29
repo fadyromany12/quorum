@@ -19,9 +19,14 @@ export function toEntry(row: Case): Entry {
     severity: row.severity ?? null,
     occurrence: row.occurrence ?? null,
     activity: Array.isArray(row.activity) ? row.activity : [],
+    appealAt: row.appealAt ? row.appealAt.getTime() : null,
+    appealResolvedAt: row.appealResolvedAt ? row.appealResolvedAt.getTime() : null,
     agentAcknowledgedAt: row.agentAcknowledgedAt ? row.agentAcknowledgedAt.getTime() : null,
     createdAt: row.createdAt.getTime(),
-    updatedAt: undefined,
+    // Exposed as an optimistic-concurrency token: the client echoes it back on a
+    // PATCH and the route rejects the write if the DB has moved on. Never written
+    // back (not in CASE_FIELDS) — Prisma's @updatedAt manages it.
+    updatedAt: row.updatedAt.getTime(),
   };
 }
 
@@ -29,7 +34,7 @@ const CASE_FIELDS = [
   "id", "account", "lob", "date", "email", "empId", "agentName", "tl", "executorName",
   "shiftStart", "shiftEnd", "violation", "sickNote", "tardyMin", "earlyMin", "compMin",
   "missingMin", "occurrence", "action", "executor", "severity", "disciplinary",
-  "deductionDays", "deductionApplied", "reclassifiedFrom", "notes", "stage", "assignee",
+  "deductionDays", "deductionApplied", "reclassifiedFrom", "notes", "evidenceUrl", "voided", "stage", "assignee",
   "notified", "opsConfirmed", "hrNeeded", "hrConfirmed", "hrRef", "actionDate", "activity",
   "requiresAcknowledgement", "agentSignature",
 ] as const;
@@ -87,7 +92,10 @@ export async function syncEntries(before: Entry[], after: Entry[]): Promise<Entr
     }),
   ]);
 
-  return settled;
+  // Re-read so callers (and the client) get DB truth — crucially the fresh
+  // updatedAt version, so a follow-up edit by the same user isn't mistaken for
+  // a stale concurrent write.
+  return loadEntries();
 }
 
 export async function writeAudit(opts: {

@@ -59,10 +59,33 @@ export function useServerData(initial) {
         setEntries(r.entries);
         toast("Case updated.");
       }, swallow),
+    // Soft delete: reversible and audited. Restore re-includes it in the
+    // engine; purge is the irreversible SuperAdmin erasure.
     deleteEntry: (id) =>
       call(`/api/entries/${id}`, "DELETE").then((r) => {
         setEntries(r.entries);
-        toast("Case deleted.");
+        toast("Case voided — restore it any time from the Voided filter.");
+      }, swallow),
+    restoreEntry: (entry) =>
+      call(`/api/entries/${entry.id}`, "PATCH", {
+        entry: {
+          ...entry,
+          voided: false,
+          activity: [...(entry.activity || []), { at: Date.now(), by: "", type: "restored", text: "Case restored." }],
+        },
+      }).then((r) => {
+        setEntries(r.entries);
+        toast("Case restored.");
+      }, swallow),
+    purgeEntry: (id) =>
+      call(`/api/entries/${id}?purge=1`, "DELETE").then((r) => {
+        setEntries(r.entries);
+        toast("Case permanently deleted.");
+      }, swallow),
+    resolveAppeal: (caseId, decision, note) =>
+      call("/api/cases/appeal/resolve", "POST", { caseId, decision, note }).then((r) => {
+        setEntries(r.entries);
+        toast(decision === "overturned" ? "Appeal granted — case overturned & dismissed." : "Appeal reviewed — original decision upheld.");
       }, swallow),
     decide: (ids, stage, assignee, comment) =>
       call("/api/entries/decide", "POST", { ids, stage, assignee, comment }).then((r) => {

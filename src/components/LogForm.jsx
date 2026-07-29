@@ -30,6 +30,7 @@ const blank = (accounts, tls, defaultAccount) => ({
   sickNote: false,
   missH: 0,
   missM: 0,
+  evidenceUrl: "",
   notes: "",
 });
 
@@ -80,6 +81,7 @@ export default function LogForm({ data, onAdd, onCancel, defaultAccount }) {
       violation: f.violation,
       sickNote: f.sickNote,
       missingMin: (Number(f.missH) || 0) * 60 + (Number(f.missM) || 0),
+      evidenceUrl: f.evidenceUrl.trim(),
       occurrence: v.occ,
       action: v.action,
       executor: v.executor,
@@ -103,7 +105,7 @@ export default function LogForm({ data, onAdd, onCancel, defaultAccount }) {
       createdAt: Date.now(),
     });
 
-    setF((p) => ({ ...p, email: "", empId: "", agentName: "", violation: "", sickNote: false, missH: 0, missM: 0, notes: "" }));
+    setF((p) => ({ ...p, email: "", empId: "", agentName: "", violation: "", sickNote: false, missH: 0, missM: 0, evidenceUrl: "", notes: "" }));
   };
 
   return (
@@ -112,7 +114,7 @@ export default function LogForm({ data, onAdd, onCancel, defaultAccount }) {
       <div className="p-4 md:p-5 ao-glass" style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 10 }}>
         <div className="ao-disp font-bold uppercase tracking-wide flex items-center gap-2" style={{ fontSize: 16, color: P.ink }}>
           <ClipboardPlus size={17} color={P.petrol} />
-          Log absence / violation
+          Log violation / leave
         </div>
         <div className="mt-1" style={{ fontSize: 12.5, color: P.sub }}>
           New cases start as <b>Pending review</b> — a TL or direct manager must escalate or dismiss them with a comment
@@ -194,6 +196,17 @@ export default function LogForm({ data, onAdd, onCancel, defaultAccount }) {
             </div>
           </div>
         )}
+
+        <div className="mt-3">
+          <Field label="Evidence link / reference (optional)">
+            <TInput
+              type="text"
+              placeholder="Call-recording ID, QA screenshot URL, certificate location…"
+              value={f.evidenceUrl}
+              onChange={(e) => set("evidenceUrl", e.target.value)}
+            />
+          </Field>
+        </div>
 
         <div className="mt-3">
           <Field label="Notes">

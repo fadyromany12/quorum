@@ -7,6 +7,7 @@ import { CalendarHeart, Clock3, Scale, ShieldAlert, CircleCheck, History } from 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { toEntry } from "@/lib/db";
+import { getLocale } from "@/lib/locale";
 import { GlassCard, GlassBadge, GlassStat, GlassProgress } from "@/components/glass";
 import AckCenter from "@/components/portal/AckCenter";
 // The shared rules engine — plain JS, identical to what the workspace uses.
@@ -28,6 +29,7 @@ export default async function AgentPortalPage() {
   if (!session?.user) redirect("/login");
   const me = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!me) redirect("/login");
+  const locale = await getLocale();
 
   const rows = await prisma.case.findMany({
     where: {
@@ -52,13 +54,14 @@ export default async function AgentPortalPage() {
     daysLeft: number;
   }>;
   const pendingAcks = entries
-    .filter((e) => e.requiresAcknowledgement && !e.agentAcknowledgedAt)
+    .filter((e) => e.requiresAcknowledgement && !e.agentAcknowledgedAt && !e.voided)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
   return (
     <main className="grid gap-4">
       {/* Pending acknowledgements — the alert + signature flow */}
       <AckCenter
+        locale={locale}
         pending={pendingAcks.map((e) => ({
           id: e.id as string,
           date: e.date as string,
@@ -68,6 +71,7 @@ export default async function AgentPortalPage() {
           severity: (e.severity as string) ?? null,
           deductionApplied: (e.deductionApplied as number) || 0,
           investigation: e.severity === "Serious" || e.severity === "Zero Tolerance",
+          appealState: (e.appealState as string) || "",
         }))}
       />
 

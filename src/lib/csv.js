@@ -38,6 +38,7 @@ const HEAD = [
   "HR Reference",
   "Action Date",
   "Status",
+  "Evidence",
   "Notes",
 ];
 
@@ -80,6 +81,7 @@ export function toCsv(entries) {
       e.hrRef || "",
       e.actionDate,
       statusOf(e),
+      e.evidenceUrl || "",
       e.notes,
     ];
   });
@@ -92,7 +94,7 @@ export function downloadCsv(entries) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `absence-log-${todayStr()}.csv`;
+  a.download = `quorum-case-log-${todayStr()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -3,13 +3,13 @@
    reached in the TL → OPS → HR pipeline. */
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Trash2, Scale, MessageSquarePlus, CheckSquare, Square, Hourglass } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2, Scale, MessageSquarePlus, CheckSquare, Square, Hourglass, Paperclip, RotateCcw, Timer, FileText, Gavel } from "lucide-react";
 import { Pill, Toggle, TInput, BtnGhost, BtnPrimary, Label } from "./ui/index.jsx";
 import ReviewBox from "./ReviewBox.jsx";
-import { P, accColor, sevColor, STATUS_COLOR } from "../lib/tokens.js";
+import { P, accColor, sevColor, STATUS_COLOR, alpha } from "../lib/tokens.js";
 import { fmtMin, fmtDate, fmtStamp, days } from "../lib/format.js";
 import { todayStr } from "../lib/dates.js";
-import { statusOf } from "../lib/engine.js";
+import { statusOf, slaFor } from "../lib/engine.js";
 import { PER_MONTH_CAP } from "../lib/constants.js";
 import { can } from "../lib/auth.js";
 
@@ -21,16 +21,22 @@ const ACTION_LABEL = {
   ops: "Confirmed by OPS",
   hr: "Approved by HR",
   reopened: "Sent back to triage",
+  voided: "Voided",
+  restored: "Restored",
 };
 
-export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, selectable, selected, onSelect }) {
+export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, onRestore, onPurge, onResolveAppeal, selectable, selected, onSelect }) {
   const [showHistory, setShowHistory] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [hrRef, setHrRef] = useState(e.hrRef || "");
+  const [appealNote, setAppealNote] = useState("");
+  const canRuleAppeal = onResolveAppeal && (can(me, "hr") || can(me, "triage"));
 
   const st = statusOf(e);
   const sev = e.severity ? sevColor(e.severity) : P.green;
-  const dimmed = e.stage === "dismissed";
+  const voided = !!e.voided;
+  const dimmed = e.stage === "dismissed" || voided;
+  const sla = slaFor(e);
   const capped = (e.deductionDays || 0) > (e.deductionApplied || 0);
 
   const log = (type, text, by = "") => ({ at: Date.now(), by, type, text });
@@ -78,11 +84,11 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
   };
 
   return (
-    <div
+    <article
       className="flex ao-glass"
       style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 8, overflow: "hidden", opacity: dimmed ? 0.7 : 1 }}
     >
-      <div style={{ width: 5, background: dimmed ? "#546468" : sev, flexShrink: 0 }} />
+      <div style={{ width: 5, background: dimmed ? "var(--dim)" : sev, flexShrink: 0 }} />
       <div className="p-3 flex-1 min-w-0">
         {/* Identity + status */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -109,6 +115,23 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
             </span>
           )}
           <span className="flex-1" />
+          {sla && (
+            <span
+              className="ao-mono inline-flex items-center gap-1"
+              title={`Waiting ${sla.ageDays} day${sla.ageDays === 1 ? "" : "s"} ${sla.label} · SLA target ${sla.limit}d`}
+              style={{
+                fontSize: 10.5,
+                padding: "1px 6px",
+                borderRadius: 999,
+                color: sla.breached ? "#fff" : sla.warn ? P.amber : P.sub,
+                background: sla.breached ? P.brick : "transparent",
+                border: `1px solid ${sla.breached ? P.brick : sla.warn ? P.amber : P.line}`,
+              }}
+            >
+              <Timer size={10} />
+              {sla.ageDays}d {sla.label}
+            </span>
+          )}
           <Pill color={STATUS_COLOR[st]} filled={st !== "Closed" && st !== "Dismissed"}>
             {st}
           </Pill>
@@ -116,7 +139,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
 
         {/* Violation line */}
         <div className="flex items-center gap-2 flex-wrap mt-2">
-          <Pill color={dimmed ? "#8A9598" : sev} filled>
+          <Pill color={dimmed ? "var(--dim)" : sev} filled>
             {e.violation}
             {e.occurrence ? ` · №${e.occurrence}` : ""}
           </Pill>
@@ -159,11 +182,33 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
           </div>
         )}
 
+        {e.evidenceUrl && (
+          <div className="mt-1 flex items-center gap-1 min-w-0" style={{ fontSize: 12 }}>
+            <Paperclip size={11} color={P.sub} style={{ flexShrink: 0 }} />
+            {/^https?:\/\//i.test(e.evidenceUrl) ? (
+              <a
+                href={e.evidenceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate"
+                style={{ color: P.petrol, textDecoration: "underline" }}
+                title={e.evidenceUrl}
+              >
+                {e.evidenceUrl}
+              </a>
+            ) : (
+              <span className="truncate" style={{ color: P.sub }} title={e.evidenceUrl}>
+                Evidence: {e.evidenceUrl}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Labour-law cap badge — only when the law actually bit */}
         {capped && !dimmed && (
           <div
             className="mt-2 flex items-start gap-2 p-2"
-            style={{ background: "rgba(232,165,75,0.10)", border: `1px solid ${P.amber}55`, borderRadius: 6 }}
+            style={{ background: P.amberWash, border: `1px solid ${alpha(P.amber, 0.33)}`, borderRadius: 6 }}
           >
             <Scale size={13} color={P.amber} style={{ flexShrink: 0, marginTop: 2 }} />
             <span style={{ fontSize: 12, color: P.inkSoft }}>
@@ -173,7 +218,58 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
           </div>
         )}
 
-        {e.stage === "review" &&
+        {voided && (
+          <div className="mt-2 p-2" style={{ background: P.mist, borderRadius: 6, fontSize: 12.5, color: P.inkSoft }}>
+            {(e.activity || [])
+              .filter((a) => a.type === "voided")
+              .slice(-1)
+              .map((a, i) => (
+                <span key={i}>
+                  Voided{a.by ? ` by ${a.by}` : ""} · {fmtStamp(a.at)}
+                </span>
+              ))[0] || "Voided — excluded from all metrics and the engine."}
+            <div className="ao-mono mt-1" style={{ fontSize: 11, color: P.sub }}>
+              Restorable at any time · not counted while voided
+            </div>
+          </div>
+        )}
+
+        {e.appealState === "pending" && !voided && (
+          <div className="mt-2 p-2.5" style={{ background: P.amberWash, border: `1px solid ${alpha(P.amber, 0.33)}`, borderRadius: 8 }}>
+            <div className="flex items-center gap-2">
+              <Gavel size={13} color={P.amber} style={{ flexShrink: 0 }} />
+              <span className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 11.5, color: P.amber }}>
+                Appeal pending
+              </span>
+            </div>
+            <div className="mt-1" style={{ fontSize: 12.5, color: P.inkSoft }}>“{e.appealReason}”</div>
+            {canRuleAppeal && (
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <TInput
+                  placeholder="Decision note (optional)…"
+                  value={appealNote}
+                  onChange={(ev) => setAppealNote(ev.target.value)}
+                  style={{ flex: 1, minWidth: 160, fontSize: 12.5, padding: "5px 8px" }}
+                />
+                <BtnGhost onClick={() => onResolveAppeal(e.id, "upheld", appealNote.trim())}>Uphold</BtnGhost>
+                <BtnPrimary bg={P.green} onClick={() => onResolveAppeal(e.id, "overturned", appealNote.trim())}>
+                  Overturn
+                </BtnPrimary>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(e.appealState === "upheld" || e.appealState === "overturned") && (
+          <div className="mt-2 inline-flex items-center gap-1.5" style={{ fontSize: 12, color: e.appealState === "overturned" ? P.green : P.sub }}>
+            <Gavel size={12} />
+            Appeal {e.appealState === "overturned" ? "granted — overturned" : "reviewed — upheld"}
+            {e.appealNote ? ` · ${e.appealNote}` : ""}
+          </div>
+        )}
+
+        {!voided &&
+          e.stage === "review" &&
           (can(me, "triage") ? (
             <ReviewBox e={e} tls={tls} onDecide={decide} />
           ) : (
@@ -197,7 +293,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
             ))}
 
         {/* Pipeline — each step belongs to a role; SuperAdmin can tap them all */}
-        {e.stage === "active" && (
+        {!voided && e.stage === "active" && (
           <div className="flex items-center gap-2 flex-wrap mt-3">
             <Toggle
               on={e.notified}
@@ -241,8 +337,8 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
         )}
 
         {/* HR execution gate */}
-        {e.stage === "active" && e.hrNeeded && !e.hrConfirmed && e.opsConfirmed && can(me, "hr") && (
-          <div className="mt-3 p-3" style={{ background: "rgba(236,111,93,0.10)", border: `1px dashed ${P.brick}66`, borderRadius: 8 }}>
+        {!voided && e.stage === "active" && e.hrNeeded && !e.hrConfirmed && e.opsConfirmed && can(me, "hr") && (
+          <div className="mt-3 p-3" style={{ background: P.brickWash, border: `1px dashed ${alpha(P.brick, 0.4)}`, borderRadius: 8 }}>
             <Label>HR case reference (required to complete)</Label>
             <div className="flex gap-2 mt-1 flex-wrap">
               <TInput
@@ -273,7 +369,7 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
                 <select
                   value={e.assignee || ""}
                   onChange={(ev) => onPatch({ ...e, assignee: ev.target.value })}
-                  style={{ fontSize: 12, color: P.ink, border: `1px solid ${P.line}`, borderRadius: 6, padding: "2px 6px", background: "rgba(255,255,255,0.05)" }}
+                  style={{ fontSize: 12, color: P.ink, border: `1px solid ${P.line}`, borderRadius: 6, padding: "2px 6px", background: "var(--well)" }}
                 >
                   <option value="">Unassigned</option>
                   {tls.map((t) => (
@@ -296,19 +392,55 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
             History ({(e.activity || []).length})
             {showHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
-          <span className="flex-1" />
-          {can(me, "delete") && (
-            <button
-              onClick={() => {
-                if (window.confirm("Delete this entry? This cannot be undone.")) onDelete(e.id);
-              }}
+          {e.disciplinary && !voided && (
+            <a
+              href={`/api/cases/${e.id}/letter`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-1"
-              style={{ fontSize: 12, color: P.sub, background: "none", border: "none", cursor: "pointer" }}
+              style={{ fontSize: 12, color: P.petrol, textDecoration: "none" }}
+              title="Download the formal warning letter (PDF)"
             >
-              <Trash2 size={12} />
-              Delete
-            </button>
+              <FileText size={12} />
+              Letter
+            </a>
           )}
+          <span className="flex-1" />
+          {can(me, "delete") &&
+            (voided ? (
+              <>
+                <button
+                  onClick={() => onRestore && onRestore(e)}
+                  className="inline-flex items-center gap-1"
+                  style={{ fontSize: 12, color: P.green, background: "none", border: "none", cursor: "pointer" }}
+                >
+                  <RotateCcw size={12} />
+                  Restore
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm("Permanently delete this case? This erases the record and cannot be undone."))
+                      onPurge && onPurge(e.id);
+                  }}
+                  className="inline-flex items-center gap-1"
+                  style={{ fontSize: 12, color: P.brick, background: "none", border: "none", cursor: "pointer" }}
+                >
+                  <Trash2 size={12} />
+                  Delete permanently
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  if (window.confirm("Void this case? It's kept and restorable, but excluded from all metrics.")) onDelete(e.id);
+                }}
+                className="inline-flex items-center gap-1"
+                style={{ fontSize: 12, color: P.sub, background: "none", border: "none", cursor: "pointer" }}
+              >
+                <Trash2 size={12} />
+                Void
+              </button>
+            ))}
         </div>
 
         {showHistory && (
@@ -341,6 +473,6 @@ export default function EntryCard({ e, tls, me, onPatch, onDelete, onDecide, sel
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }

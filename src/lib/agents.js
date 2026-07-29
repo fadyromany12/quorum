@@ -15,6 +15,7 @@ import { nameFromEmail } from "./format.js";
 export function listAgents(entries) {
   const map = new Map();
   for (const e of entries) {
+    if (e.voided) continue; // voided cases are excluded everywhere but the archive
     const key = agentKeyOf(e);
     if (!key) continue;
     const row =
@@ -44,7 +45,7 @@ export function listAgents(entries) {
  * the tier rather than resetting to №1.
  */
 export function agentSummary(entries, agent, asOf = todayStr()) {
-  const mine = entries.filter((e) => agentMatches(e, agent));
+  const mine = entries.filter((e) => agentMatches(e, agent) && !e.voided);
   const live = mine.filter(countsForDiscipline);
   const dismissed = mine.filter((e) => e.stage === "dismissed");
   const pending = mine.filter((e) => e.stage === "review");
@@ -98,11 +99,26 @@ export function agentSummary(entries, agent, asOf = todayStr()) {
   };
 }
 
+/**
+ * Active warning chains whose 90-day reset falls within `withinDays`, across
+ * every agent — so a TL can act before a warning lapses. Sorted soonest-first.
+ */
+export function upcomingResets(entries, withinDays) {
+  const out = [];
+  for (const a of listAgents(entries)) {
+    const s = agentSummary(entries, { email: a.email, empId: a.empId });
+    for (const w of s.activeWarnings) {
+      if (w.daysLeft <= withinDays) out.push({ name: a.name, account: a.account, empId: a.empId, email: a.email, ...w });
+    }
+  }
+  return out.sort((x, y) => x.daysLeft - y.daysLeft);
+}
+
 /** Chronological case history, newest first, for the profile timeline. */
 export function agentTimeline(entries, agent, windowDays) {
   const today = todayStr();
   return entries
-    .filter((e) => agentMatches(e, agent))
+    .filter((e) => agentMatches(e, agent) && !e.voided)
     .filter((e) => !windowDays || daysBetween(e.date, today) <= windowDays)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || (b.createdAt || 0) - (a.createdAt || 0));
 }

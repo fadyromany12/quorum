@@ -9,6 +9,7 @@
    workspace keeps its proven light look for now, painted over the dark shell. */
 
 import { useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -23,6 +24,7 @@ import {
   ScrollText,
   Clock3,
   Scale,
+  ShieldAlert,
   TriangleAlert,
   Plus,
   CircleCheck,
@@ -32,9 +34,11 @@ import {
 } from "lucide-react";
 
 import { useServerData } from "../hooks/useServerData.js";
-import { P, accColor } from "../lib/tokens.js";
+import { useCountUp } from "../hooks/useCountUp.js";
+import { P, accColor, alpha } from "../lib/tokens.js";
 import { BRAND } from "../lib/brand";
 import Logo from "./Logo";
+import ThemeToggle from "./ThemeToggle";
 import { todayStr, daysAgo, monthOf } from "../lib/dates.js";
 import { fmtMin } from "../lib/format.js";
 import { statusOf, computeEscalations, countsForDiscipline } from "../lib/engine.js";
@@ -66,7 +70,7 @@ const NAV = [
   { id: "settings", label: "Settings", icon: Settings2 },
 ];
 
-export default function Workspace({ initial, me }) {
+export default function Workspace({ initial, me, themeIntent }) {
   const {
     data,
     error,
@@ -77,6 +81,9 @@ export default function Workspace({ initial, me }) {
     commitRta,
     patchEntry,
     deleteEntry,
+    restoreEntry,
+    purgeEntry,
+    resolveAppeal,
     decide,
     loadSamples,
     setDcm,
@@ -91,16 +98,35 @@ export default function Workspace({ initial, me }) {
 
   const allowedTabs = TABS_FOR[me.role] || [];
   const [tab, setTab] = useState(allowedTabs[0] || "dashboard");
+
+  /* Tab changes cross-fade through the View Transitions API where it exists;
+     browsers without it just get the instant switch they always had. */
+  const goTab = (next) => {
+    if (next === tab) return;
+    if (typeof document !== "undefined" && document.startViewTransition) {
+      document.startViewTransition(() => flushSync(() => setTab(next)));
+    } else {
+      setTab(next);
+    }
+  };
   const [acc, setAcc] = useState("All");
   const [range, setRange] = useState("all"); // all | 30 | month
   const [showForm, setShowForm] = useState(false);
   const [logFilter, setLogFilter] = useState("all"); // all | review | open
   const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [query, setQuery] = useState("");
+  const LOG_PAGE = 50;
+  const [logLimit, setLogLimit] = useState(LOG_PAGE);
 
   useEffect(() => {
     if (!allowedTabs.includes(tab)) setTab(allowedTabs[0] || "dashboard");
   }, [me.role]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Any change to the filters is a fresh view — start back at the first page so
+  // a stale "show more" count can't carry over.
+  useEffect(() => {
+    setLogLimit(LOG_PAGE);
+  }, [logFilter, assigneeFilter, query, acc, range]);
 
   // Success toasts hang around briefly, then leave on their own.
   useEffect(() => {
@@ -127,20 +153,26 @@ export default function Workspace({ initial, me }) {
     [data.entries, acc]
   );
 
-  const live = useMemo(() => scoped.filter((e) => e.stage !== "dismissed"), [scoped]);
-  const pendingReview = useMemo(() => scoped.filter((e) => e.stage === "review"), [scoped]);
+  // Voided cases are excluded from every pipeline set and metric; they live only
+  // in the Voided archive filter below.
+  const scopedLive = useMemo(() => scoped.filter((e) => !e.voided), [scoped]);
+  const voidedLog = useMemo(() => scoped.filter((e) => e.voided), [scoped]);
+  const live = useMemo(() => scopedLive.filter((e) => e.stage !== "dismissed"), [scopedLive]);
+  const pendingReview = useMemo(() => scopedLive.filter((e) => e.stage === "review"), [scopedLive]);
   const pendingOps = useMemo(
-    () => scoped.filter((e) => e.stage === "active" && e.notified && !e.opsConfirmed),
-    [scoped]
+    () => scopedLive.filter((e) => e.stage === "active" && e.notified && !e.opsConfirmed),
+    [scopedLive]
   );
   const pendingHr = useMemo(
-    () => scoped.filter((e) => e.stage === "active" && e.hrNeeded && !e.hrConfirmed && e.opsConfirmed),
-    [scoped]
+    () => scopedLive.filter((e) => e.stage === "active" && e.hrNeeded && !e.hrConfirmed && e.opsConfirmed),
+    [scopedLive]
   );
+  const pendingAppeals = useMemo(() => scopedLive.filter((e) => e.appealState === "pending"), [scopedLive]);
 
   // Hours were lost whether or not a manager has ruled, so triage-stage cases
   // count. Deductions are only scheduled once a case is escalated.
   const hoursLost = live.reduce((s, e) => s + (e.missingMin || 0), 0);
+  const disciplinaryCount = live.filter((e) => e.disciplinary).length;
   const deductionPool = scoped.filter(countsForDiscipline).reduce((s, e) => s + (e.deductionApplied || 0), 0);
   const activeEscalations = pendingOps.length + pendingHr.length;
 
@@ -162,7 +194,10 @@ export default function Workspace({ initial, me }) {
 
   const empty = data.entries.length === 0;
   const q = query.trim().toLowerCase();
-  const visibleLog = scoped.filter((e) => {
+  // The Voided filter shows the archive; every other filter works over the
+  // live (non-voided) set.
+  const logBase = logFilter === "voided" ? voidedLog : scopedLive;
+  const visibleLog = logBase.filter((e) => {
     if (logFilter === "review" && e.stage !== "review") return false;
     if (logFilter === "open") {
       const s = statusOf(e);
@@ -190,12 +225,13 @@ export default function Workspace({ initial, me }) {
       {/* ── Header band — sticky glass over the aurora ── */}
       <header
         className="ao-glass"
-        style={{ background: "rgba(6,12,20,0.65)", borderBottom: `1px solid ${P.line}`, position: "sticky", top: 0, zIndex: 40 }}
+        style={{ background: "var(--hdr-bg)", borderBottom: `1px solid ${P.line}`, position: "sticky", top: 0, zIndex: 40 }}
       >
         <div className="mx-auto px-4 py-4" style={{ maxWidth: 1320 }}>
           <div className="flex items-center gap-3 flex-wrap">
             <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org} · DCM v1.0`} />
             <span className="flex-1" />
+            <ThemeToggle initial={themeIntent} />
             <UserChip me={me} onLogout={() => signOut({ callbackUrl: "/login" })} />
           </div>
 
@@ -204,19 +240,23 @@ export default function Workspace({ initial, me }) {
               <button
                 key={a}
                 onClick={() => setAcc(a)}
-                className="ao-disp uppercase tracking-wide font-semibold transition"
+                className="ao-disp uppercase tracking-wide font-semibold transition ao-glow"
                 style={{
                   fontSize: 12,
                   padding: "5px 12px",
                   borderRadius: 999,
                   cursor: "pointer",
-                  color: acc === a ? "#06121A" : "#C9D6D4",
-                  background: acc === a ? "#E9F1F0" : "transparent",
-                  border: `1px solid ${acc === a ? "#E9F1F0" : "#3A4155"}`,
+                  color: acc === a ? "var(--chip-on-text)" : "var(--hdr-text)",
+                  background: acc === a ? "var(--chip-on-bg)" : "transparent",
+                  border: `1px solid ${acc === a ? "var(--chip-on-bg)" : "var(--hdr-line)"}`,
+                  "--glow": a === "All" ? "color-mix(in srgb, var(--signal) 60%, transparent)" : `${alpha(accColor(a), 0.67)}`,
                 }}
               >
                 {a !== "All" && (
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: accColor(a), display: "inline-block", marginRight: 6 }} />
+                  <span
+                    className={acc === a ? "ao-pulse" : ""}
+                    style={{ width: 7, height: 7, borderRadius: 999, background: accColor(a), display: "inline-block", marginRight: 6 }}
+                  />
                 )}
                 {a}
               </button>
@@ -226,7 +266,7 @@ export default function Workspace({ initial, me }) {
               value={range}
               onChange={(e) => setRange(e.target.value)}
               className="ao-disp uppercase tracking-wide font-semibold"
-              style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "transparent", color: "#C9D6D4", border: "1px solid #3A4155" }}
+              style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "transparent", color: "var(--hdr-text)", border: "1px solid var(--hdr-line)" }}
             >
               <option value="all" style={{ color: P.ink }}>All time</option>
               <option value="30" style={{ color: P.ink }}>Last 30 days</option>
@@ -241,7 +281,7 @@ export default function Workspace({ initial, me }) {
         <div className="mx-auto px-4" style={{ maxWidth: 1320 }}>
           <div
             className="flex items-center gap-2 mt-3 p-3"
-            style={{ background: "rgba(236,111,93,0.10)", border: `1px solid ${P.brick}66`, borderRadius: 8 }}
+            style={{ background: P.brickWash, border: `1px solid ${alpha(P.brick, 0.4)}`, borderRadius: 8 }}
             role="alert"
           >
             <CircleAlert size={15} color={P.brick} style={{ flexShrink: 0 }} />
@@ -258,7 +298,7 @@ export default function Workspace({ initial, me }) {
         <nav className="hidden md:block py-4" style={{ width: 190, flexShrink: 0, position: "sticky", top: 118 }}>
           <div className="grid gap-1">
             {nav.map((n) => (
-              <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => setTab(n.id)} />
+              <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
             ))}
           </div>
           {can(me, "log") && (
@@ -266,11 +306,11 @@ export default function Workspace({ initial, me }) {
               <BtnPrimary
                 icon={Plus}
                 onClick={() => {
-                  setTab("log");
+                  goTab("log");
                   setShowForm(true);
                 }}
               >
-                Log absence
+                Log case
               </BtnPrimary>
             </div>
           )}
@@ -281,40 +321,41 @@ export default function Workspace({ initial, me }) {
           {/* Mobile nav */}
           <div className="md:hidden flex gap-2 overflow-x-auto mt-4 pb-1">
             {nav.map((n) => (
-              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => setTab(n.id)} />
+              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
             ))}
           </div>
 
           {/* KPI scorecard — noise for WFM, whose whole job here is the upload */}
           {me.role !== "WFM" && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-              <KPI label="Total hours lost" value={fmtMin(hoursLost)} icon={Clock3} tone={hoursLost ? P.brick : P.green} />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
+              <KPI label="Disciplinary cases" value={disciplinaryCount} icon={ShieldAlert} tone={disciplinaryCount ? P.brick : P.green} />
+              <KPI label="Total hours lost" value={hoursLost} format={(n) => fmtMin(Math.round(n))} icon={Clock3} tone={hoursLost ? P.brick : P.green} />
               <KPI
                 label="Pending triage review"
                 value={pendingReview.length}
                 icon={Inbox}
                 tone={pendingReview.length ? P.petrol : P.green}
-                onClick={allowedTabs.includes("triage") ? () => setTab("triage") : undefined}
+                onClick={allowedTabs.includes("triage") ? () => goTab("triage") : undefined}
               />
               <KPI
                 label="Active escalations"
                 value={activeEscalations}
                 icon={TriangleAlert}
                 tone={activeEscalations ? P.amber : P.green}
-                onClick={allowedTabs.includes("approvals") ? () => setTab("approvals") : undefined}
+                onClick={allowedTabs.includes("approvals") ? () => goTab("approvals") : undefined}
               />
-              <KPI label="Deduction pool" value={`${deductionPool}d`} icon={Scale} tone={deductionPool ? P.ink : P.green} />
+              <KPI label="Deduction pool" value={deductionPool} format={(n) => `${Math.round(n)}d`} icon={Scale} tone={deductionPool ? P.ink : P.green} />
             </div>
           )}
 
           {/* key={tab}: remount on tab change so the entrance animation replays */}
-          <div className="mt-4 ao-rise" key={tab}>
+          <div className="mt-4 ao-rise" key={tab} style={{ viewTransitionName: "panel" }}>
             {showEmpty ? (
               <EmptyState
                 canLog={can(me, "log")}
                 canSamples={can(me, "admin")}
                 onLog={() => {
-                  setTab("log");
+                  goTab("log");
                   setShowForm(true);
                 }}
                 onSamples={loadSamples}
@@ -334,7 +375,7 @@ export default function Workspace({ initial, me }) {
                   can(me, "log") && (
                     <div>
                       <BtnPrimary icon={Plus} onClick={() => setShowForm(true)}>
-                        Log absence
+                        Log case
                       </BtnPrimary>
                     </div>
                   )
@@ -347,6 +388,7 @@ export default function Workspace({ initial, me }) {
                         ["all", "All"],
                         ["review", "Pending review"],
                         ["open", "Open only"],
+                        ...(voidedLog.length ? [["voided", `Voided (${voidedLog.length})`]] : []),
                       ].map(([f, lbl]) => (
                         <button
                           key={f}
@@ -357,9 +399,9 @@ export default function Workspace({ initial, me }) {
                             padding: "3px 10px",
                             borderRadius: 999,
                             cursor: "pointer",
-                            border: `1px solid ${logFilter === f ? P.petrol : P.line}`,
+                            border: `1px solid ${logFilter === f ? (f === "voided" ? P.sub : P.petrol) : P.line}`,
                             color: logFilter === f ? "#fff" : P.sub,
-                            background: logFilter === f ? P.petrol : "transparent",
+                            background: logFilter === f ? (f === "voided" ? P.sub : P.petrol) : "transparent",
                           }}
                         >
                           {lbl}
@@ -368,7 +410,7 @@ export default function Workspace({ initial, me }) {
                       <select
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        style={{ fontSize: 12, color: P.inkSoft, border: `1px solid ${P.line}`, borderRadius: 999, padding: "3px 8px", background: "rgba(255,255,255,0.05)" }}
+                        style={{ fontSize: 12, color: P.inkSoft, border: `1px solid ${P.line}`, borderRadius: 999, padding: "3px 8px", background: "var(--well)" }}
                       >
                         <option>All</option>
                         <option>Unassigned</option>
@@ -383,16 +425,26 @@ export default function Workspace({ initial, me }) {
                         style={{ width: 170, fontSize: 12.5, padding: "4px 10px", borderRadius: 999 }}
                       />
                       <span className="ao-mono" style={{ fontSize: 11, color: P.sub }}>
-                        {visibleLog.length} in view
+                        {Math.min(logLimit, visibleLog.length)} of {visibleLog.length} in view
                       </span>
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid gap-2 ao-stagger">
                       {visibleLog.length === 0 && <Muted>Nothing matches these filters.</Muted>}
-                      {visibleLog.map((e) => (
-                        <EntryCard key={e.id} e={e} tls={data.tls} me={me} onPatch={patchEntry} onDelete={deleteEntry} onDecide={decideOne} />
+                      {visibleLog.slice(0, logLimit).map((e) => (
+                        <EntryCard key={e.id} e={e} tls={data.tls} me={me} onPatch={patchEntry} onDelete={deleteEntry} onDecide={decideOne} onRestore={restoreEntry} onPurge={purgeEntry} onResolveAppeal={resolveAppeal} />
                       ))}
                     </div>
+
+                    {/* The engine always sees the whole ledger; this only caps how
+                        many rows are painted, so a long history stays responsive. */}
+                    {visibleLog.length > logLimit && (
+                      <div className="flex justify-center mt-1">
+                        <BtnGhost onClick={() => setLogLimit((n) => n + LOG_PAGE)}>
+                          Show more · {visibleLog.length - logLimit} older case{visibleLog.length - logLimit === 1 ? "" : "s"}
+                        </BtnGhost>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -435,6 +487,17 @@ export default function Workspace({ initial, me }) {
                   onPatch={patchEntry}
                   onDelete={deleteEntry}
                 />
+                <Queue
+                  title="Appeals queue"
+                  hint="Agents who have contested a finalized case. Uphold the original decision, or overturn it — overturning dismisses the case so it stops counting."
+                  rows={pendingAppeals}
+                  tone={P.amber}
+                  tls={data.tls}
+                  me={me}
+                  onPatch={patchEntry}
+                  onDelete={deleteEntry}
+                  onResolveAppeal={resolveAppeal}
+                />
               </div>
             )}
 
@@ -461,7 +524,7 @@ export default function Workspace({ initial, me }) {
                 onAccounts={setAccounts}
                 onTls={setTls}
                 onReset={resetAll}
-                onExport={() => downloadCsv(data.entries)}
+                onExport={() => downloadCsv(data.entries.filter((e) => !e.voided))}
                 onLoadSamples={loadSamples}
               />
             )}
@@ -472,14 +535,14 @@ export default function Workspace({ initial, me }) {
       {/* Success toast — bottom right, self-dismissing */}
       {notice && (
         <div
-          className="ao-pop ao-glass fixed bottom-5 right-5 z-50 flex items-center gap-2.5"
+          className="ao-slide-in ao-glass fixed bottom-5 right-5 z-50 flex items-center gap-2.5"
           style={{
-            background: "rgba(10,24,22,0.85)",
-            border: `1px solid ${P.green}55`,
+            background: "var(--toast-bg)",
+            border: `1px solid ${alpha(P.green, 0.33)}`,
             borderRadius: 12,
             padding: "12px 16px",
             maxWidth: 380,
-            boxShadow: `0 12px 40px rgba(2,6,23,0.6), 0 0 24px -8px ${P.green}66`,
+            boxShadow: `var(--elev-3), 0 0 24px -8px ${alpha(P.green, 0.4)}`,
           }}
           role="status"
         >
@@ -502,12 +565,12 @@ export default function Workspace({ initial, me }) {
 
 function UserChip({ me, onLogout }) {
   return (
-    <div className="flex items-center gap-2 pl-3" style={{ borderLeft: "1px solid #3A4155" }}>
+    <div className="flex items-center gap-2 pl-3" style={{ borderLeft: "1px solid var(--hdr-line)" }}>
       <div className="text-right min-w-0">
-        <div className="ao-disp font-semibold truncate" style={{ fontSize: 12.5, color: "#F2F6F5", lineHeight: 1.2 }}>
+        <div className="ao-disp font-semibold truncate" style={{ fontSize: 12.5, color: "var(--hdr-strong)", lineHeight: 1.2 }}>
           {me.name}
         </div>
-        <div className="ao-mono" style={{ fontSize: 10, color: "#8B9AA6" }}>
+        <div className="ao-mono" style={{ fontSize: 10, color: "var(--sub)" }}>
           {ROLE_LABEL[me.role]}
         </div>
       </div>
@@ -515,7 +578,7 @@ function UserChip({ me, onLogout }) {
         onClick={onLogout}
         title="Sign out"
         aria-label="Sign out"
-        style={{ border: "1px solid #3A4155", background: "transparent", color: "#C9D6D4", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
+        style={{ border: "1px solid var(--hdr-line)", background: "transparent", color: "var(--hdr-text)", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
       >
         <LogOut size={13} />
       </button>
@@ -528,7 +591,8 @@ function NavItem({ item, active, badge, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="ao-disp uppercase tracking-wide font-semibold flex items-center gap-2 transition"
+      data-active={active ? "true" : "false"}
+      className="ao-disp ao-nav uppercase tracking-wide font-semibold flex items-center gap-2 transition group"
       style={{
         fontSize: 12.5,
         padding: "9px 12px",
@@ -541,10 +605,19 @@ function NavItem({ item, active, badge, onClick }) {
         color: active ? P.ink : P.sub,
       }}
     >
-      <Icon size={15} color={active ? P.petrol : P.sub} />
-      <span className="flex-1">{item.label}</span>
+      <Icon
+        size={15}
+        color={active ? P.petrol : P.sub}
+        className="transition-transform duration-200 group-hover:scale-110"
+      />
+      <span className="flex-1 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">
+        {item.label}
+      </span>
       {badge > 0 && (
-        <span className="ao-mono ao-pulse" style={{ fontSize: 10.5, background: P.brick, color: "#fff", borderRadius: 999, padding: "1px 6px" }}>
+        <span
+          className="ao-mono ao-halo"
+          style={{ fontSize: 10.5, background: P.brick, color: "#fff", borderRadius: 999, padding: "1px 6px", "--halo": "rgba(242,109,95,0.55)" }}
+        >
           {badge}
         </span>
       )}
@@ -580,20 +653,35 @@ function NavChip({ item, active, badge, onClick }) {
   );
 }
 
-function KPI({ label, value, icon: Icon, tone, onClick }) {
+/* A scorecard figure. `value` is the raw number so it can count up; `format`
+   renders it (hours, days…). Clickable cards lift, glow and nudge their icon —
+   the whole tile reads as a control, not a label. */
+function KPI({ label, value, format, icon: Icon, tone, onClick }) {
+  const n = useCountUp(value);
+  const shown = format ? format(n) : Math.round(n).toLocaleString();
   return (
     <div
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick() : undefined}
-      className={onClick ? "p-3 ao-glass ao-lift gradient-hairline" : "p-3 ao-glass gradient-hairline"}
-      style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 12, cursor: onClick ? "pointer" : "default" }}
+      className={`p-3 ao-glass gradient-hairline group ${onClick ? "ao-lift ao-glow" : ""}`}
+      style={{
+        background: P.card,
+        border: `1px solid ${P.line}`,
+        borderRadius: 12,
+        cursor: onClick ? "pointer" : "default",
+        "--glow": tone || "color-mix(in srgb, var(--signal) 60%, transparent)",
+      }}
     >
       <div className="flex items-center gap-2">
-        <Icon size={13} color={tone || P.sub} />
-        <div className="ao-mono font-semibold" style={{ fontSize: 22, color: tone || P.ink, lineHeight: 1 }}>
-          {value}
+        <Icon
+          size={13}
+          color={tone || P.sub}
+          className={onClick ? "transition-transform duration-200 group-hover:scale-125" : undefined}
+        />
+        <div className="ao-mono font-semibold ao-fluid-num" style={{ color: tone || P.ink }}>
+          {shown}
         </div>
       </div>
       <div className="ao-disp uppercase tracking-wider font-semibold mt-1" style={{ fontSize: 10.5, color: P.sub }}>
@@ -603,7 +691,7 @@ function KPI({ label, value, icon: Icon, tone, onClick }) {
   );
 }
 
-function Queue({ title, hint, rows, tone, tls, me, onPatch, onDelete }) {
+function Queue({ title, hint, rows, tone, tls, me, onPatch, onDelete, onResolveAppeal }) {
   return (
     <div>
       <SectionTitle count={rows.length} tone={tone}>
@@ -618,9 +706,9 @@ function Queue({ title, hint, rows, tone, tls, me, onPatch, onDelete }) {
           <Muted>Clear — nothing waiting here.</Muted>
         </div>
       ) : (
-        <div className="grid gap-2">
+        <div className="grid gap-2 ao-stagger">
           {rows.map((e) => (
-            <EntryCard key={e.id} e={e} tls={tls} me={me} onPatch={onPatch} onDelete={onDelete} />
+            <EntryCard key={e.id} e={e} tls={tls} me={me} onPatch={onPatch} onDelete={onDelete} onResolveAppeal={onResolveAppeal} />
           ))}
         </div>
       )}
@@ -632,7 +720,7 @@ function EmptyState({ canLog, canSamples, onLog, onSamples }) {
   return (
     <div className="p-8 text-center" style={{ background: P.card, border: `1px dashed ${P.line}`, borderRadius: 12 }}>
       <div className="ao-disp font-bold uppercase tracking-wide" style={{ fontSize: 18, color: P.ink }}>
-        No absences logged yet
+        No cases logged yet
       </div>
       <div className="mt-2 mx-auto" style={{ fontSize: 13.5, color: P.sub, maxWidth: 470 }}>
         Log the first case: the matrix prescribes the action, a TL or direct manager escalates or dismisses it with a
@@ -641,7 +729,7 @@ function EmptyState({ canLog, canSamples, onLog, onSamples }) {
       <div className="flex gap-3 justify-center flex-wrap mt-5">
         {canLog && (
           <BtnPrimary onClick={onLog} icon={Plus}>
-            Log first absence
+            Log first case
           </BtnPrimary>
         )}
         {canSamples && <BtnGhost onClick={onSamples}>Load sample data</BtnGhost>}

@@ -20,7 +20,7 @@ export const Field = ({ label, children, span }) => (
 
 const inputStyle = {
   border: `1px solid ${P.line}`,
-  background: "rgba(255,255,255,0.05)",
+  background: "var(--well)",
   color: P.ink,
   borderRadius: 6,
   padding: "8px 10px",
@@ -52,91 +52,110 @@ export const Pill = ({ color, children, filled, title }) => (
   </span>
 );
 
+/* Pipeline steps: ticking one pops the check in, so completing a stage feels
+   like an action rather than a repaint. */
 export const Toggle = ({ on, label, onClick, disabledLook, title }) => (
   <button
     onClick={onClick}
     title={title}
-    className="ao-disp uppercase tracking-wide font-semibold transition inline-flex items-center gap-1"
+    className={`ao-disp uppercase tracking-wide font-semibold transition inline-flex items-center gap-1 ${
+      disabledLook ? "" : "ao-glow"
+    }`}
     style={{
       fontSize: 11,
       padding: "4px 10px",
       borderRadius: 6,
       cursor: "pointer",
-      color: on ? "#fff" : disabledLook ? "#6E8287" : P.sub,
+      color: on ? "#fff" : disabledLook ? "var(--disabled)" : P.sub,
       background: on ? P.green : "transparent",
       border: `1px ${disabledLook && !on ? "dashed" : "solid"} ${on ? P.green : P.line}`,
+      "--glow": on ? P.green : "color-mix(in srgb, var(--signal) 55%, transparent)",
     }}
   >
-    {on && <Check size={12} strokeWidth={3} />}
+    {on && <Check size={12} strokeWidth={3} className="ao-pop" />}
     {label}
   </button>
 );
 
-export const BtnPrimary = ({ children, onClick, disabled, bg, title, icon: Icon }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    title={title}
-    className="ao-disp uppercase tracking-wider font-semibold transition inline-flex items-center gap-2"
-    style={{
-      fontSize: 13,
-      padding: "10px 18px",
-      borderRadius: 6,
-      color: "#fff",
-      background: disabled ? "rgba(139,92,246,0.35)" : bg || P.petrol,
-      border: "none",
-      cursor: disabled ? "default" : "pointer",
-    }}
-  >
-    {Icon && <Icon size={14} />}
-    {children}
-  </button>
-);
+/* Primary actions carry the Signal: a light sweep on hover, a matching glow,
+   and an icon that leans into the press. */
+export const BtnPrimary = ({ children, onClick, disabled, bg, title, icon: Icon }) => {
+  const tone = bg || P.petrol;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`ao-disp uppercase tracking-wider font-semibold transition inline-flex items-center gap-2 group ${
+        disabled ? "" : "ao-sheen ao-glow"
+      }`}
+      style={{
+        fontSize: 13,
+        padding: "10px 18px",
+        borderRadius: 6,
+        color: "#fff",
+        background: disabled ? "color-mix(in srgb, var(--signal) 35%, transparent)" : tone,
+        border: "none",
+        cursor: disabled ? "default" : "pointer",
+        "--glow": tone,
+      }}
+    >
+      {Icon && <Icon size={14} className="transition-transform duration-200 group-hover:scale-110" />}
+      {children}
+    </button>
+  );
+};
 
 export const BtnGhost = ({ children, onClick, color, disabled, title, icon: Icon }) => (
   <button
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className="ao-disp uppercase tracking-wider font-semibold transition inline-flex items-center gap-2"
+    className={`ao-disp uppercase tracking-wider font-semibold transition inline-flex items-center gap-2 group ${
+      disabled ? "" : "ao-glow"
+    }`}
     style={{
       fontSize: 13,
       padding: "10px 16px",
       borderRadius: 6,
-      color: disabled ? "#6E8287" : color || P.inkSoft,
+      color: disabled ? "var(--disabled)" : color || P.inkSoft,
       background: "transparent",
       border: `1px solid ${P.line}`,
       cursor: disabled ? "default" : "pointer",
+      "--glow": color || "color-mix(in srgb, var(--signal) 60%, transparent)",
     }}
   >
-    {Icon && <Icon size={14} />}
+    {Icon && <Icon size={14} className="transition-transform duration-200 group-hover:scale-110" />}
     {children}
   </button>
 );
 
 export const Card = ({ title, children, right, accent }) => (
-  <div className="p-4 ao-glass" style={{ background: P.card, border: `1px solid ${accent || P.line}`, borderRadius: 12 }}>
+  <section
+    className="p-4 ao-glass ao-lift"
+    style={{ background: P.card, border: `1px solid ${accent || P.line}`, borderRadius: 12 }}
+  >
     {(title || right) && (
       <div className="flex items-center justify-between gap-2">
-        <div className="ao-disp font-bold uppercase tracking-wide" style={{ fontSize: 13, color: P.sub }}>
+        <h2 className="ao-disp font-bold uppercase tracking-wide" style={{ fontSize: 13, color: P.sub }}>
           {title}
-        </div>
+        </h2>
         {right}
       </div>
     )}
     <div className={title || right ? "mt-3" : ""}>{children}</div>
-  </div>
+  </section>
 );
 
 export const SectionTitle = ({ children, count, tone }) => (
-  <div className="ao-disp font-bold uppercase tracking-wide mb-2 flex items-center gap-2" style={{ fontSize: 14, color: P.ink }}>
+  <h2 className="ao-disp font-bold uppercase tracking-wide mb-2 flex items-center gap-2" style={{ fontSize: 14, color: P.ink }}>
     {children}
     {count !== undefined && (
       <span className="ao-mono" style={{ color: tone || P.petrol }}>
         ({count})
       </span>
     )}
-  </div>
+  </h2>
 );
 
 export const Muted = ({ children }) => <div style={{ fontSize: 13, color: P.sub }}>{children}</div>;

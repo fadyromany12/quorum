@@ -9,8 +9,9 @@ import {
   PER_INCIDENT_CAP,
   PER_MONTH_CAP,
   LAW_CITATION,
+  SLA_DAYS,
 } from "./constants.js";
-import { todayStr, daysBetween, addDays, monthOf, yearOf, consecutiveRun } from "./dates.js";
+import { todayStr, daysBetween, addDays, monthOf, yearOf, consecutiveRun, toDay } from "./dates.js";
 import { deductionDaysOf, applyLaborLawCap, capNotes } from "./deductions.js";
 import { days, ordinal } from "./format.js";
 import { toAgentRef, agentMatches, agentKeyOf, agentLabel } from "./identity.js";
@@ -18,15 +19,56 @@ import { toAgentRef, agentMatches, agentKeyOf, agentLabel } from "./identity.js"
 /** A case counts toward discipline only once a manager has escalated it.
     Pending-review cases are deliberately inert — that is the point of the
     triage gate — and dismissed cases never count at all. */
-export const countsForDiscipline = (e) => e.stage === "active";
+export const countsForDiscipline = (e) => e.stage === "active" && !e.voided;
 
 export function statusOf(e) {
+  if (e.voided) return "Voided";
   if (e.stage === "review") return "Pending review";
   if (e.stage === "dismissed") return "Dismissed";
   if (e.notified && e.opsConfirmed && (!e.hrNeeded || e.hrConfirmed)) return "Closed";
   if (e.notified && e.opsConfirmed && e.hrNeeded && !e.hrConfirmed) return "Awaiting HR";
   if (e.notified && !e.opsConfirmed) return "Awaiting OPS";
   return "Open";
+}
+
+const lastActivityAt = (e, type) => {
+  const hits = (e.activity || []).filter((a) => a.type === type);
+  return hits.length ? hits[hits.length - 1].at : null;
+};
+
+/**
+ * How long an *open* case has been waiting in its current pipeline stage, and
+ * whether that exceeds the stage's SLA target. Returns null for cases that
+ * aren't waiting on anyone (closed, dismissed, voided). Time is measured from
+ * when the case entered the stage — the stamped activity event, or the log
+ * time as a fallback.
+ */
+export function slaFor(e, today = todayStr()) {
+  if (e.voided || (e.stage !== "review" && e.stage !== "active")) return null;
+  let sinceMs;
+  let label;
+  let limit;
+  if (e.stage === "review") {
+    sinceMs = e.createdAt;
+    label = "in triage";
+    limit = SLA_DAYS.review;
+  } else if (!e.notified) {
+    sinceMs = lastActivityAt(e, "escalated") || e.createdAt;
+    label = "awaiting notify";
+    limit = SLA_DAYS.notify;
+  } else if (!e.opsConfirmed) {
+    sinceMs = lastActivityAt(e, "notified") || e.createdAt;
+    label = "awaiting OPS";
+    limit = SLA_DAYS.ops;
+  } else if (e.hrNeeded && !e.hrConfirmed) {
+    sinceMs = lastActivityAt(e, "ops") || e.createdAt;
+    label = "awaiting HR";
+    limit = SLA_DAYS.hr;
+  } else {
+    return null; // fully closed — nobody is waiting
+  }
+  const ageDays = sinceMs ? Math.max(0, daysBetween(toDay(sinceMs), today)) : 0;
+  return { label, ageDays, limit, warn: ageDays >= limit, breached: ageDays > limit };
 }
 
 export function findRule(dcm, { id, name }) {
@@ -73,6 +115,7 @@ export function emergencyUsage(entries, agent, date, excludeId) {
       e.violation === "Emergency Leave" &&
       agentMatches(e, agent) &&
       e.stage !== "dismissed" &&
+      !e.voided &&
       e.date
   );
 
@@ -387,6 +430,6 @@ export function computeEscalations(entries) {
  */
 export function monthlyDeductionFor(entries, agent, month) {
   return entries
-    .filter((e) => agentMatches(e, agent) && e.stage !== "dismissed" && monthOf(e.date) === month)
+    .filter((e) => agentMatches(e, agent) && e.stage !== "dismissed" && !e.voided && monthOf(e.date) === month)
     .reduce((s, e) => s + (e.deductionApplied || 0), 0);
 }

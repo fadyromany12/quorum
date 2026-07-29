@@ -4,15 +4,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, guarded, GuardError } from "@/lib/api-guard";
-import { hashPassword, DEFAULT_PASSWORD, MIN_PASSWORD } from "@/lib/passwords";
+import { hashPassword, passwordProblem } from "@/lib/passwords";
 
 export const POST = guarded(async (req: Request) => {
   const actor = await requireRole(null); // any authenticated role
   const body = await req.json().catch(() => ({}));
   const password = String(body.password || "");
 
-  if (password.length < MIN_PASSWORD) throw new GuardError(400, `At least ${MIN_PASSWORD} characters.`);
-  if (password === DEFAULT_PASSWORD) throw new GuardError(400, "Pick something other than the default password.");
+  const problem = passwordProblem(password);
+  if (problem) throw new GuardError(400, problem);
 
   await prisma.user.update({
     where: { id: actor.id },

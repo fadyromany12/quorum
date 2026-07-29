@@ -17,6 +17,22 @@ export const ROLE_LABEL = {
 export const DEFAULT_PASSWORD = "Welcome@123";
 export const MIN_PASSWORD = 8;
 
+/**
+ * Password policy in one place — returns null when the password is acceptable,
+ * else a short human-readable reason. Pure, so the change-password form and the
+ * API enforce exactly the same rule (client for instant feedback, server for
+ * authority).
+ */
+export function passwordProblem(pw) {
+  const s = String(pw || "");
+  if (s.length < MIN_PASSWORD) return `Use at least ${MIN_PASSWORD} characters.`;
+  if (!/[a-z]/.test(s)) return "Add a lowercase letter.";
+  if (!/[A-Z]/.test(s)) return "Add an uppercase letter.";
+  if (!/[0-9]/.test(s)) return "Add a number.";
+  if (s === DEFAULT_PASSWORD) return "Choose a password different from the default.";
+  return null;
+}
+
 /* What each staff role may see. Agents never reach the workspace at all —
    they live in /agent-portal, enforced by the route-group layouts. */
 export const TABS_FOR = {

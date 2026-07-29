@@ -9,7 +9,7 @@ import { CircleCheck, ArrowUpRight, Archive, CheckSquare, Square } from "lucide-
 import { SectionTitle, Muted, Field, TSelect, TArea, Label, BtnPrimary, BtnGhost } from "./ui/index.jsx";
 import EntryCard from "./EntryCard.jsx";
 import { MIN_COMMENT } from "./ReviewBox.jsx";
-import { P } from "../lib/tokens.js";
+import { P, alpha } from "../lib/tokens.js";
 import { plural } from "../lib/format.js";
 
 export default function TriageGate({ rows, tls, me, canAct, onPatch, onDelete, onDecide, onBulk }) {
@@ -80,7 +80,7 @@ export default function TriageGate({ rows, tls, me, canAct, onPatch, onDelete, o
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                     <Field label="Assign all to (needed to escalate)">
-                      <TSelect value={assignee} onChange={(e) => setAssignee(e.target.value)} style={{ borderColor: assignee ? P.line : `${P.amber}99` }}>
+                      <TSelect value={assignee} onChange={(e) => setAssignee(e.target.value)} style={{ borderColor: assignee ? P.line : `${alpha(P.amber, 0.6)}` }}>
                         <option value="">Unassigned</option>
                         {tls.map((t) => (
                           <option key={t}>{t}</option>

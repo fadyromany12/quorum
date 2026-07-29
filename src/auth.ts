@@ -6,6 +6,35 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/passwords";
+import { loginStatus, recordLoginFailure, clearLoginFailures } from "@/lib/login-throttle";
+
+// Authentication audit. Best-effort: a logging failure must never block a
+// login, so every write is wrapped. actorId links to the user on success.
+async function auditLogin(
+  action: "LOGIN_SUCCEEDED" | "LOGIN_FAILED" | "LOGIN_BLOCKED",
+  email: string,
+  extra: { actorId?: string; role?: string; reason?: string } = {}
+) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: extra.actorId ?? null,
+        actorName: email || "unknown",
+        actorRole: extra.role ?? "Anonymous",
+        action,
+        summary:
+          action === "LOGIN_SUCCEEDED"
+            ? `Signed in: ${email}`
+            : action === "LOGIN_BLOCKED"
+              ? `Login blocked (rate limited): ${email}`
+              : `Failed login: ${email}`,
+        meta: extra.reason ? { reason: extra.reason } : {},
+      },
+    });
+  } catch {
+    /* audit is best-effort — never break auth on a logging error */
+  }
+}
 
 declare module "next-auth" {
   interface Session {
@@ -34,8 +63,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = String(creds?.email || "").trim().toLowerCase();
         const password = String(creds?.password || "");
         if (!email || !password) return null;
+
+        // Throttle first — a locked-out identifier costs no bcrypt work. The
+        // window lives in Postgres, so it holds across every serverless
+        // instance; a success clears the count.
+        if ((await loginStatus(email)).blocked) {
+          await auditLogin("LOGIN_BLOCKED", email, { reason: "rate_limited" });
+          return null;
+        }
+
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.active || !verifyPassword(password, user.passHash)) return null;
+        if (!user || !user.active || !verifyPassword(password, user.passHash)) {
+          await recordLoginFailure(email);
+          await auditLogin("LOGIN_FAILED", email, {
+            reason: !user ? "no_such_user" : !user.active ? "inactive" : "bad_password",
+          });
+          return null;
+        }
+        await clearLoginFailures(email);
+        await auditLogin("LOGIN_SUCCEEDED", email, { actorId: user.id, role: user.role });
         return {
           id: user.id,
           name: user.name,

@@ -181,9 +181,25 @@ function resolveViolation({ violationText, statusText, tardyMin, missingMin, ear
  * Each row: raw fields + { violation, lost, comp, net, cls, err }
  *   cls: "clean" | "compensated" | "irregular" | "error"
  */
-export function assessRta(text, dcm) {
+/** Natural key for RTA de-duplication: one agent, one day, one violation. */
+export const rtaKeyOf = (id, name, date, violation) =>
+  `${String(id || name || "").trim().toLowerCase()}|${date}|${violation}`;
+
+/**
+ * @param {string} text   the raw sheet
+ * @param {Array}  dcm    the matrix
+ * @param {Array}  existing  the current ledger — rows matching a live case (or an
+ *                 earlier row in the same file) are flagged as duplicates and
+ *                 will not re-import. Defaults to none.
+ */
+export function assessRta(text, dcm, existing = []) {
   const parsed = parseCsv(text);
   if (!parsed.length) return { header: null, rows: [], counts: {}, error: "The file is empty." };
+
+  // Voided cases free their slot — a re-import after voiding is intentional.
+  const seen = new Set(
+    (existing || []).filter((e) => !e.voided).map((e) => rtaKeyOf(e.empId, e.agentName, e.date, e.violation))
+  );
 
   const header = findHeader(parsed);
   if (!header) {
@@ -248,10 +264,22 @@ export function assessRta(text, dcm) {
     } else {
       row.cls = "irregular";
     }
+
+    // De-dupe rows that would otherwise create a case: a match against the live
+    // ledger or an earlier row in this same file is flagged, not re-imported.
+    if (row.cls === "irregular" || row.cls === "compensated") {
+      const key = rtaKeyOf(row.empId, row.name, row.date, row.violation);
+      if (seen.has(key)) {
+        row.cls = "duplicate";
+        row.err = "Already logged — duplicate";
+      } else {
+        seen.add(key);
+      }
+    }
     return row;
   });
 
-  const counts = { clean: 0, compensated: 0, irregular: 0, error: 0 };
+  const counts = { clean: 0, compensated: 0, irregular: 0, error: 0, duplicate: 0 };
   rows.forEach((r) => counts[r.cls]++);
   return { header, rows, counts };
 }

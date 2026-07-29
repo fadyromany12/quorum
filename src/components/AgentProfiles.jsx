@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import { Search, UserRound, CalendarClock, Scale, ShieldAlert, CircleSlash } from "lucide-react";
 import { Card, Pill, Muted, TInput, TSelect, Label } from "./ui/index.jsx";
-import { P, accColor, sevColor, STATUS_COLOR } from "../lib/tokens.js";
+import { P, accColor, sevColor, STATUS_COLOR, alpha } from "../lib/tokens.js";
 import { fmtMin, fmtDate, fmtDateLong, fmtStamp, days, plural } from "../lib/format.js";
 import { addDays } from "../lib/dates.js";
 import { RESET_DAYS, PER_MONTH_CAP, EMERGENCY_QUOTA } from "../lib/constants.js";
@@ -53,7 +53,7 @@ export default function AgentProfiles({ entries, accounts }) {
         <Card>
           <div
             className="flex items-center gap-2"
-            style={{ border: `1px solid ${P.line}`, background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: "8px 10px" }}
+            style={{ border: `1px solid ${P.line}`, background: "var(--well)", borderRadius: 6, padding: "8px 10px" }}
           >
             <Search size={14} color={P.sub} />
             <input
@@ -100,25 +100,25 @@ export default function AgentProfiles({ entries, accounts }) {
                 onClick={() => setSelected(a.key)}
                 className="text-left p-3 flex ao-glass ao-lift"
                 style={{
-                  background: on ? "rgba(139,92,246,0.16)" : P.card,
+                  background: on ? "var(--signal-soft)" : P.card,
                   border: `1px solid ${on ? P.petrol : P.line}`,
                   borderRadius: 8,
                   cursor: "pointer",
                 }}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="ao-disp font-bold uppercase tracking-wide truncate" style={{ fontSize: 13.5, color: on ? "#F2F6F5" : P.ink }}>
+                  <div className="ao-disp font-bold uppercase tracking-wide truncate" style={{ fontSize: 13.5, color: on ? "var(--hdr-strong)" : P.ink }}>
                     {a.name}
                   </div>
-                  <div className="ao-mono truncate" style={{ fontSize: 11, color: on ? "#8B9AA6" : P.sub }}>
+                  <div className="ao-mono truncate" style={{ fontSize: 11, color: on ? "var(--sub)" : P.sub }}>
                     {a.empId || "—"} · {a.email || "no email on file"}
                   </div>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1" style={{ fontSize: 11, color: on ? "#C9D6D4" : P.sub }}>
+                    <span className="inline-flex items-center gap-1" style={{ fontSize: 11, color: on ? "var(--hdr-text)" : P.sub }}>
                       <span style={{ width: 6, height: 6, borderRadius: 999, background: accColor(a.account) }} />
                       {a.account}
                     </span>
-                    <span className="ao-mono" style={{ fontSize: 11, color: on ? "#C9D6D4" : P.sub }}>
+                    <span className="ao-mono" style={{ fontSize: 11, color: on ? "var(--hdr-text)" : P.sub }}>
                       {plural(a.summary.logged, "case")}
                     </span>
                     {warns > 0 && (
@@ -155,22 +155,22 @@ function Profile({ agent, entries }) {
         <div style={{ width: 6, background: accColor(agent.account), flexShrink: 0 }} />
         <div className="p-4 flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <UserRound size={16} color="#B9AFE6" />
-            <span className="ao-disp font-bold uppercase" style={{ fontSize: 19, letterSpacing: 1, color: "#F2F6F5" }}>
+            <UserRound size={16} color="var(--deep-accent)" />
+            <span className="ao-disp font-bold uppercase" style={{ fontSize: 19, letterSpacing: 1, color: "var(--hdr-strong)" }}>
               {agent.name}
             </span>
             <span className="flex-1" />
-            <Pill color="#B9AFE6">{agent.account}</Pill>
+            <Pill color="var(--deep-accent)">{agent.account}</Pill>
           </div>
-          <div className="ao-mono mt-1" style={{ fontSize: 12, color: "#8B9AA6" }}>
+          <div className="ao-mono mt-1" style={{ fontSize: 12, color: "var(--sub)" }}>
             {agent.empId || "no employee ID"} · {agent.email || "no email on file"} · TL {agent.tl || "—"}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
             <HeadStat label="Cases (90d)" value={timeline.filter((e) => e.stage !== "dismissed").length} />
-            <HeadStat label="Hours lost" value={fmtMin(s.hoursLost)} tone="#E8A79C" />
-            <HeadStat label="Deducted this month" value={`${s.monthDeduction}/${PER_MONTH_CAP}`} tone={capHit ? "#F0D6A8" : "#F2F6F5"} />
-            <HeadStat label="Emergency used" value={`${s.emergency.used}/${EMERGENCY_QUOTA}`} tone={s.emergency.used >= EMERGENCY_QUOTA ? "#E8A79C" : "#F2F6F5"} />
+            <HeadStat label="Hours lost" value={fmtMin(s.hoursLost)} tone="var(--coral-soft)" />
+            <HeadStat label="Deducted this month" value={`${s.monthDeduction}/${PER_MONTH_CAP}`} tone={capHit ? "var(--cap-text)" : "var(--hdr-strong)"} />
+            <HeadStat label="Emergency used" value={`${s.emergency.used}/${EMERGENCY_QUOTA}`} tone={s.emergency.used >= EMERGENCY_QUOTA ? "var(--coral-soft)" : "var(--hdr-strong)"} />
           </div>
         </div>
       </div>
@@ -206,7 +206,7 @@ function Profile({ agent, entries }) {
           </div>
         )}
         {capHit && (
-          <div className="mt-3 flex items-start gap-2 p-2" style={{ background: "rgba(232,165,75,0.10)", border: `1px solid ${P.amber}55`, borderRadius: 6 }}>
+          <div className="mt-3 flex items-start gap-2 p-2" style={{ background: P.amberWash, border: `1px solid ${alpha(P.amber, 0.33)}`, borderRadius: 6 }}>
             <Scale size={13} color={P.amber} style={{ flexShrink: 0, marginTop: 2 }} />
             <span style={{ fontSize: 12, color: P.inkSoft }}>
               Monthly deduction cap reached — {days(s.monthDeduction)} taken. Further deductions this month are not
@@ -238,7 +238,7 @@ function Profile({ agent, entries }) {
 function TimelineRow({ e }) {
   const st = statusOf(e);
   const dismissed = e.stage === "dismissed";
-  const dot = dismissed ? "#546468" : e.severity ? sevColor(e.severity) : P.green;
+  const dot = dismissed ? "var(--dim)" : e.severity ? sevColor(e.severity) : P.green;
   const review = (e.activity || []).find((a) => a.type === "escalated" || a.type === "dismissed");
 
   return (
@@ -260,7 +260,7 @@ function TimelineRow({ e }) {
         <span className="ao-mono font-semibold" style={{ fontSize: 12, color: P.ink }}>
           {fmtDateLong(e.date)}
         </span>
-        <Pill color={dismissed ? "#8A9598" : dot} filled={!dismissed}>
+        <Pill color={dismissed ? "var(--dim)" : dot} filled={!dismissed}>
           {e.violation}
           {e.occurrence ? ` · №${e.occurrence}` : ""}
         </Pill>
@@ -317,11 +317,11 @@ function TimelineRow({ e }) {
 
 function HeadStat({ label, value, tone }) {
   return (
-    <div className="p-2" style={{ background: "rgba(255,255,255,0.07)", borderRadius: 6 }}>
-      <div className="ao-mono font-semibold" style={{ fontSize: 16, color: tone || "#F2F6F5", lineHeight: 1.2 }}>
+    <div className="p-2" style={{ background: "var(--deep-well)", borderRadius: 6 }}>
+      <div className="ao-mono font-semibold" style={{ fontSize: 16, color: tone || "var(--hdr-strong)", lineHeight: 1.2 }}>
         {value}
       </div>
-      <div className="ao-disp uppercase tracking-wider font-semibold" style={{ fontSize: 9.5, color: "#8B9AA6" }}>
+      <div className="ao-disp uppercase tracking-wider font-semibold" style={{ fontSize: 9.5, color: "var(--sub)" }}>
         {label}
       </div>
     </div>

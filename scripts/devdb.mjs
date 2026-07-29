@@ -10,7 +10,20 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-const PGBIN = process.env.PGBIN || "C:\\Program Files\\PostgreSQL\\18\\bin";
+import { execSync } from "node:child_process";
+
+/** PGBIN wins; otherwise the standard Windows install dir, or whatever
+    pg_ctl the PATH knows about on Unix. */
+function findPgBin() {
+  if (process.env.PGBIN) return process.env.PGBIN;
+  if (process.platform === "win32") return "C:\\Program Files\\PostgreSQL\\18\\bin";
+  try {
+    return path.dirname(execSync("command -v pg_ctl || ls -d /usr/lib/postgresql/*/bin/pg_ctl | tail -1", { shell: "/bin/sh", encoding: "utf8" }).trim());
+  } catch {
+    return "/usr/bin";
+  }
+}
+const PGBIN = findPgBin();
 const DATA = path.resolve(".pgdata");
 const PORT = process.env.PGPORT || "5544";
 const DB = "absence_ops";

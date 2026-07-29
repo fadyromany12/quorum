@@ -23,19 +23,19 @@ export function QuorumMark({ size = 30 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 34 34" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id="q-node" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#A78BFA" />
+          <stop offset="0%" stopColor="var(--deep-accent)" />
           <stop offset="100%" stopColor="#6D28D9" />
         </linearGradient>
       </defs>
       {/* hairline ring */}
-      <circle cx="16" cy="16" r="10" stroke="rgba(255,255,255,0.22)" strokeWidth="1" />
+      <circle cx="16" cy="16" r="10" stroke="var(--logo-ring)" strokeWidth="1" />
       {/* the Q's tail — through the SE seat, outward */}
       <line x1="23.07" y1="23.07" x2="29.5" y2="29.5" stroke={BRAND.signal} strokeWidth="2.4" strokeLinecap="round" />
       {NODES.map((n, i) =>
         n.present ? (
           <circle key={i} cx={n.x} cy={n.y} r="2.15" fill="url(#q-node)" />
         ) : (
-          <circle key={i} cx={n.x} cy={n.y} r="1.65" stroke="rgba(255,255,255,0.35)" strokeWidth="1.1" fill="none" />
+          <circle key={i} cx={n.x} cy={n.y} r="1.65" stroke="var(--logo-seat)" strokeWidth="1.1" fill="none" />
         )
       )}
     </svg>
@@ -61,13 +61,13 @@ export default function Logo({
       </span>
       <span className="min-w-0">
         <span
-          className="block font-medium lowercase leading-none text-slate-100"
-          style={{ fontFamily: "var(--font-display)", fontSize: size * 0.62, letterSpacing: "-0.02em" }}
+          className="block font-medium lowercase leading-none"
+          style={{ fontFamily: "var(--font-display)", fontSize: size * 0.62, letterSpacing: "-0.02em", color: "var(--hdr-strong)" }}
         >
           {BRAND.wordmark}
         </span>
         {subtitle && (
-          <span className="mt-1 block text-[11px] leading-none text-slate-400">{subtitle}</span>
+          <span className="mt-1 block text-[11px] leading-none" style={{ color: "var(--sub)" }}>{subtitle}</span>
         )}
       </span>
     </div>

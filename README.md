@@ -4,8 +4,9 @@
 
 **Live demo:** https://quorum-ops.vercel.app — every account below signs in with `Welcome@123`.
 
-Full-stack BPO workforce & compliance for Konecta GDC accounts (Lenovo, Hertz, Beko): daily absence
-logging, RTA bulk imports, a rule-driven Disciplinary Consequences Matrix, multi-tier approvals with
+Full-stack BPO workforce & compliance for Konecta GDC accounts (Lenovo, Hertz, Beko): violation and
+leave tracking across the full 35-rule disciplinary catalogue (conduct, data-protection and
+zero-tolerance cases as much as attendance), RTA bulk imports, multi-tier approvals with
 Egyptian-labour-law deduction capping, an append-only audit log — and an agent self-service portal
 where finalized disciplinary actions are digitally acknowledged and signed.
 

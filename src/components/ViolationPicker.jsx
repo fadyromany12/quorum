@@ -97,7 +97,7 @@ export default function ViolationPicker({ dcm, value, onChange }) {
         className="flex items-center gap-2"
         style={{
           border: `1px solid ${open ? P.petrol : P.line}`,
-          background: "rgba(255,255,255,0.05)",
+          background: "var(--well)",
           borderRadius: 6,
           padding: "8px 10px",
         }}
@@ -109,7 +109,7 @@ export default function ViolationPicker({ dcm, value, onChange }) {
         )}
         <input
           value={open ? q : value || ""}
-          placeholder={value ? value : "Search 35 violations or leave types…"}
+          placeholder={value ? value : `Search ${dcm.length} violations or leave types…`}
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -147,11 +147,11 @@ export default function ViolationPicker({ dcm, value, onChange }) {
             maxHeight: 320,
             overflowY: "auto",
             // Floats over content, so it can't be see-through like the cards.
-            background: "rgba(13,26,36,0.97)",
-            backdropFilter: "blur(18px)",
+            background: "var(--overlay)",
+            backdropFilter: "blur(var(--glass-blur))",
             border: `1px solid ${P.line}`,
             borderRadius: 8,
-            boxShadow: "0 18px 40px rgba(2,6,23,0.6)",
+            boxShadow: "var(--elev-3)",
           }}
         >
           {flat.length === 0 && (

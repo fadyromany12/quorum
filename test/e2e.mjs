@@ -9,7 +9,13 @@
 import { execFileSync } from "node:child_process";
 
 const BASE = "http://localhost:3000";
-const PSQL = "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe";
+// psql from PGBIN when set, else the PATH (falling back to the default Windows
+// install dir so the original setup keeps working unconfigured).
+const PSQL = process.env.PGBIN
+  ? `${process.env.PGBIN}/psql${process.platform === "win32" ? ".exe" : ""}`
+  : process.platform === "win32"
+    ? "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe"
+    : "psql";
 const sql = (q) =>
   execFileSync(PSQL, ["-h", "localhost", "-p", "5544", "-U", "postgres", "-d", "absence_ops", "-tAc", q], {
     encoding: "utf8",

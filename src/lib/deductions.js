@@ -31,6 +31,7 @@ export function monthDeductionUsed(entries, agent, date, excludeId) {
         e.id !== excludeId &&
         agentMatches(e, agent) &&
         e.stage !== "dismissed" &&
+        !e.voided &&
         monthOf(e.date) === month
     )
     .reduce((sum, e) => sum + (e.deductionApplied || 0), 0);

@@ -1,4 +1,4 @@
-// Absence Ops — relational schema.
+// Quorum — relational schema.
 //
 // Field names on Case deliberately mirror the pure rules engine's entry shape
 // (src/lib/engine.js): rows read from Prisma are engine-ready after the thin
@@ -73,6 +73,11 @@ model Case {
   violation String
   sickNote  Boolean @default(false)
 
+  // Evidence pointer: a link or reference to proof held in another system — a
+  // call-recording ID, a QA screenshot URL, a medical-certificate location.
+  // Free text on purpose; the app stores the pointer, not the file.
+  evidenceUrl String @default("")
+
   // Lost-time components, minutes. missingMin is net of compensation — it is
   // what analytics count.
   tardyMin   Int @default(0)
@@ -94,6 +99,11 @@ model Case {
 
   notes String @default("")
 
+  // Soft delete. A voided case is retained and fully restorable but excluded
+  // from the engine and every metric — disciplinary records are never truly
+  // destroyed except by an explicit SuperAdmin purge.
+  voided Boolean @default(false)
+
   // Pipeline
   stage        CaseStage @default(review)
   assignee     String    @default("")
@@ -107,6 +117,16 @@ model Case {
   // Per-case activity timeline shown on the card ({at, by, type, text}[]).
   // System-of-record events additionally land in AuditLog.
   activity Json @default("[]")
+
+  // ── Appeal / right to contest ────────────────────────────────────────────
+  // The agent may contest a finalized disciplinary case once. appealState is
+  // "" | pending | upheld | overturned. Overturning dismisses the case (it stops
+  // counting); upholding leaves it intact. All transitions are audited.
+  appealState      String    @default("")
+  appealReason     String    @default("")
+  appealAt         DateTime?
+  appealNote       String    @default("") // the resolver's decision note
+  appealResolvedAt DateTime?
 
   // ── Digital acknowledgement ──────────────────────────────────────────────
   // Set true when HR/OPS finalizes a disciplinary case; the agent portal
@@ -123,6 +143,8 @@ model Case {
   @@index([email, violation, date])
   @@index([stage])
   @@index([requiresAcknowledgement, agentAcknowledgedAt])
+  // Supports the paginated read API's account-scoped, date-ordered windows.
+  @@index([account, date])
 }
 
 // The editable Disciplinary Consequences Matrix. Seeded with the 35-violation
@@ -147,6 +169,17 @@ model AppConfig {
   tls      Json // team-lead display names
 }
 
+// Login throttle state, shared across serverless instances. One row per failed
+// attempt; a sliding window over `at` decides lockout, a success clears the
+// email's rows. Rows age out on the next failure for that email.
+model LoginAttempt {
+  id    String   @id @default(cuid())
+  email String
+  at    DateTime @default(now())
+
+  @@index([email, at])
+}
+
 // Append-only system audit. The API exposes create and read — never update or
 // delete (the sole exception is the SuperAdmin factory reset, which wipes the
 // whole database). actor is SetNull so deleting a user never erases history.
@@ -157,7 +190,7 @@ model AuditLog {
   actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
   actorName String
   actorRole String
-  action    String // CASE_CREATED | CASE_DECIDED | CASE_UPDATED | CASE_DELETED | CASE_ACKNOWLEDGED | RTA_IMPORTED | DCM_UPDATED | CONFIG_UPDATED | USER_CREATED | USER_UPDATED | USER_DELETED | USER_PASSWORD_CHANGED | FACTORY_RESET
+  action    String // CASE_CREATED | CASE_DECIDED | CASE_UPDATED | CASE_DELETED | CASE_VOIDED | CASE_ACKNOWLEDGED | APPEAL_SUBMITTED | APPEAL_RESOLVED | RTA_IMPORTED | DCM_UPDATED | CONFIG_UPDATED | USER_CREATED | USER_UPDATED | USER_DELETED | USER_PASSWORD_CHANGED | FACTORY_RESET | LOGIN_SUCCEEDED | LOGIN_FAILED | LOGIN_BLOCKED
   caseId    String?
   summary   String
   meta      Json     @default("{}")

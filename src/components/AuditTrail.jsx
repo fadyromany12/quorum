@@ -7,7 +7,7 @@
    text search. Nothing here mutates — the API has no write surface for it. */
 
 import { useEffect, useMemo, useState } from "react";
-import { ScrollText, Search, RefreshCw, Signature, Gavel, UploadCloud, UserCog, KeyRound, Settings2, Table2, Trash2, ClipboardPlus, Pencil, Bomb } from "lucide-react";
+import { ScrollText, Search, RefreshCw, Signature, Gavel, UploadCloud, UserCog, KeyRound, Settings2, Table2, Trash2, ClipboardPlus, Pencil, Bomb, LogIn, ShieldAlert, Ban, Archive, Scale } from "lucide-react";
 import { Card, Pill, Muted, BtnGhost } from "./ui/index.jsx";
 import { P } from "../lib/tokens.js";
 import { fmtStamp, plural } from "../lib/format.js";
@@ -19,7 +19,8 @@ const ACTIONS = {
   CASE_DECIDED: { label: "Decided", color: P.amber, icon: Gavel },
   CASE_UPDATED: { label: "Updated", color: P.sub, icon: Pencil },
   CASE_DELETED: { label: "Deleted", color: P.brick, icon: Trash2 },
-  CASE_ACKNOWLEDGED: { label: "Signed", color: "#A78BFA", icon: Signature },
+  CASE_VOIDED: { label: "Voided", color: "var(--dim)", icon: Archive },
+  CASE_ACKNOWLEDGED: { label: "Signed", color: "var(--deep-accent)", icon: Signature },
   RTA_IMPORTED: { label: "RTA import", color: P.petrol, icon: UploadCloud },
   DCM_UPDATED: { label: "Matrix", color: P.amber, icon: Table2 },
   CONFIG_UPDATED: { label: "Config", color: P.sub, icon: Settings2 },
@@ -28,6 +29,11 @@ const ACTIONS = {
   USER_DELETED: { label: "User −", color: P.brick, icon: UserCog },
   USER_PASSWORD_CHANGED: { label: "Password", color: P.sub, icon: KeyRound },
   FACTORY_RESET: { label: "Reset", color: P.brick, icon: Bomb },
+  LOGIN_SUCCEEDED: { label: "Login", color: P.green, icon: LogIn },
+  LOGIN_FAILED: { label: "Login ✗", color: P.amber, icon: ShieldAlert },
+  LOGIN_BLOCKED: { label: "Blocked", color: P.brick, icon: Ban },
+  APPEAL_SUBMITTED: { label: "Appeal", color: P.amber, icon: Gavel },
+  APPEAL_RESOLVED: { label: "Appeal ✓", color: P.petrol, icon: Scale },
 };
 
 export default function AuditTrail() {
@@ -93,7 +99,7 @@ export default function AuditTrail() {
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <div
           className="flex items-center gap-2"
-          style={{ border: `1px solid ${P.line}`, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: "5px 12px", width: 240 }}
+          style={{ border: `1px solid ${P.line}`, background: "var(--well)", borderRadius: 999, padding: "5px 12px", width: 240 }}
         >
           <Search size={13} color={P.sub} />
           <input
@@ -126,7 +132,7 @@ export default function AuditTrail() {
               style={{
                 fontSize: 11, padding: "3px 10px", borderRadius: 999, cursor: "pointer",
                 border: `1px solid ${on ? meta.color : P.line}`,
-                color: on ? "#06121A" : meta.color,
+                color: on ? "var(--chip-on-text)" : meta.color,
                 background: on ? meta.color : "transparent",
               }}
             >
@@ -141,7 +147,19 @@ export default function AuditTrail() {
           {error}
         </div>
       )}
-      {rows === null && <Muted>Loading the trail…</Muted>}
+      {rows === null && (
+        <div className="grid gap-1.5" aria-busy="true" aria-label="Loading the audit trail">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="flex items-start gap-3 p-2.5" style={{ background: P.mist, borderRadius: 10 }}>
+              <div className="ao-skeleton" style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0, marginTop: 2 }} />
+              <div className="flex-1 grid gap-1.5">
+                <div className="ao-skeleton" style={{ height: 11, width: `${38 + ((i * 13) % 26)}%` }} />
+                <div className="ao-skeleton" style={{ height: 10, width: `${62 + ((i * 17) % 30)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {rows !== null && !error && visible.length === 0 && <Muted>No events match.</Muted>}
 
       <div className="grid gap-1.5">
