@@ -20,6 +20,7 @@ import {
 import { todayStr } from "./dates.js";
 import { buildEmployeeQuery } from "./employees-query.js";
 import { GuardError } from "./api-guard";
+import { encryptPii, decryptPii } from "./pii-crypto.js";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -198,7 +199,42 @@ export async function readPii(employeeId: string, actor: Actor) {
     },
   });
 
-  return { employee, pii };
+  /* Decrypt at the edge of persistence, so nothing above this layer has to know
+     the columns are ciphertext — or remember to decrypt them.
+
+     A failure here becomes a 409 with the real reason rather than a generic 500.
+     "Internal error" on an HR record tells the person looking at it nothing, and
+     the two things that actually cause this — a missing or rotated key, and a
+     value that failed its authentication check — need completely different
+     responses. Neither message discloses anything: the key is never in it, and
+     someone who can trigger it already holds piiRead. */
+  try {
+    return { employee, pii: decryptPii(pii, employeeId) as typeof pii };
+  } catch (e) {
+    throw new GuardError(409, e instanceof Error ? e.message : "Could not read this record's identifiers.");
+  }
+}
+
+/**
+ * Write PII, encrypting the sensitive columns on the way in.
+ *
+ * Every path that writes these columns goes through here — the HR form and the
+ * approved profile-change both — because encryption applied at call sites is
+ * encryption that one call site eventually forgets. This file already exists to
+ * be the only place that talks to Postgres about people; that is exactly the
+ * property that makes it the right home for the cipher boundary.
+ *
+ * Takes a partial record: a profile change that verifies one field must not
+ * blank the other fifteen.
+ */
+export async function writePii(employeeId: string, data: Record<string, string>) {
+  const enc = encryptPii(data, employeeId) as Record<string, string>;
+  const row = await prisma.employeePII.upsert({
+    where: { employeeId },
+    create: { employeeId, ...enc },
+    update: enc,
+  });
+  return decryptPii(row, employeeId) as typeof row;
 }
 
 type EventInput = {

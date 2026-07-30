@@ -20,6 +20,7 @@ import {
 import { todayStr } from "./dates.js";
 import { recordGrant } from "./leave-db";
 import { verifiedChangeSet } from "./profile-policy.js";
+import { writePii } from "./employee-db";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -256,11 +257,10 @@ export async function decideRequest(
       await prisma.employee.update({ where: { id: final.subjectId }, data: cs.employee });
     }
     if (Object.keys(cs.pii).length) {
-      await prisma.employeePII.upsert({
-        where: { employeeId: final.subjectId },
-        create: { employeeId: final.subjectId, ...cs.pii },
-        update: cs.pii,
-      });
+      // Through writePii, so an approved change to an IBAN lands encrypted like
+      // every other write — a second path to the same columns is a second path
+      // to storing them in the clear.
+      await writePii(final.subjectId, cs.pii as Record<string, string>);
     }
   }
 

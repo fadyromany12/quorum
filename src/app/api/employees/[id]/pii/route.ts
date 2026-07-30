@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { requireRole, guarded, GuardError } from "@/lib/api-guard";
-import { readPii } from "@/lib/employee-db";
+import { readPii, writePii, assertVisibleEmployee } from "@/lib/employee-db";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/db";
 
@@ -20,6 +20,11 @@ const idFrom = (req: Request) => {
 
 export const GET = guarded(async (req: Request) => {
   const actor = await requireRole("piiRead");
+  /* piiRead is held only by fleet-wide roles today, so this is a no-op — which
+     is exactly why it belongs here. The day someone grants a lead piiRead, the
+     scope check is already in place rather than being the thing that was
+     forgotten. */
+  await assertVisibleEmployee(actor, idFrom(req));
   const result = await readPii(idFrom(req), actor);
   if (!result) throw new GuardError(404, "No such employee.");
   // pii may legitimately be null — an applicant who has not submitted it yet.
@@ -44,6 +49,7 @@ const NID_RE = /^\d{14}$/;
 export const PUT = guarded(async (req: Request) => {
   const actor = await requireRole("piiWrite");
   const id = idFrom(req);
+  await assertVisibleEmployee(actor, id);
   const body = await req.json().catch(() => ({}));
 
   const employee = await prisma.employee.findUnique({
@@ -60,11 +66,9 @@ export const PUT = guarded(async (req: Request) => {
   const data: Record<string, string> = {};
   for (const f of FIELDS) data[f] = String(body[f] ?? "").trim();
 
-  const pii = await prisma.employeePII.upsert({
-    where: { employeeId: id },
-    create: { employeeId: id, ...data },
-    update: data,
-  });
+  // writePii encrypts the identity and payment columns on the way in and hands
+  // back the readable record — the cipher boundary lives in one place.
+  const pii = await writePii(id, data);
 
   /* The summary names which fields were supplied, never their values — an audit
      log that quotes an IBAN has just become a second copy of the data. */
