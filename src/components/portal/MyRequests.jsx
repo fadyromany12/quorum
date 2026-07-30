@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CalendarDays, Send, RefreshCw, Check, X, Clock, Undo2, TriangleAlert, Scale,
+  FileText, Download,
 } from "lucide-react";
 import { Card, Pill, Muted, BtnGhost, BtnPrimary, TInput, TSelect, Label } from "../ui/index.jsx";
 import { P } from "../../lib/tokens.js";
@@ -23,6 +24,15 @@ import { plural } from "../../lib/format.js";
 import { daysBetween, todayStr } from "../../lib/dates.js";
 
 const LEAVE_TYPES = ["Annual", "Sick", "Casual", "Unpaid"];
+
+/* The letters HR issues on request. Each is generated from the employment
+   record on download, never stored — so a reissued letter is the same letter,
+   with today's date and whatever the record says now. */
+const LETTER_KINDS = [
+  { key: "employment", label: "Employment letter", why: "Confirms your role and start date." },
+  { key: "bank", label: "Bank letter", why: "For opening an account or a loan application." },
+  { key: "salary", label: "Salary certificate", why: "States your current base salary." },
+];
 
 const STATUS_META = {
   pending: { color: P.amber, label: "Awaiting approval", icon: Clock },
@@ -103,6 +113,20 @@ export default function MyRequests({ entitlementDays = 0 }) {
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
 
+  const requestLetter = async (kind) => {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/requests", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "letterRequest", payload: { kind } }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not request the letter.");
+      setNotice("Requested — HR will approve it, then you can download the PDF here.");
+      await load();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+
   const withdraw = async (id) => {
     setBusy(true);
     setError("");
@@ -116,6 +140,16 @@ export default function MyRequests({ entitlementDays = 0 }) {
 
   return (
     <div className="grid gap-3">
+      {/* Leave, letters and withdrawals all report through here, so the banner
+          sits above all three rather than inside whichever card came first —
+          a letter confirmation under "Request leave" reads as the wrong reply. */}
+      {error && <div role="alert" style={{ fontSize: 13, color: P.brick }}>{error}</div>}
+      {notice && (
+        <div style={{ background: P.greenWash, border: `1px solid ${P.green}`, borderRadius: 10, padding: "9px 12px", fontSize: 12.5, color: P.green }}>
+          {notice}
+        </div>
+      )}
+
       {/* ── Balance ── */}
       <Card title={<span className="inline-flex items-center gap-2"><CalendarDays size={14} />Leave</span>}>
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}>
@@ -148,13 +182,6 @@ export default function MyRequests({ entitlementDays = 0 }) {
 
       {/* ── Request ── */}
       <Card title="Request leave">
-        {error && <div className="mb-3" role="alert" style={{ fontSize: 13, color: P.brick }}>{error}</div>}
-        {notice && (
-          <div className="mb-3" style={{ background: P.greenWash, border: `1px solid ${P.green}`, borderRadius: 10, padding: "9px 12px", fontSize: 12.5, color: P.green }}>
-            {notice}
-          </div>
-        )}
-
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
           <div className="grid gap-1">
             <Label>Leave type</Label>
@@ -200,6 +227,32 @@ export default function MyRequests({ entitlementDays = 0 }) {
         </div>
       </Card>
 
+      {/* ── Letters ── */}
+      <Card title={<span className="inline-flex items-center gap-2"><FileText size={14} />Request an HR letter</span>}>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" }}>
+          {LETTER_KINDS.map((k) => (
+            <button
+              key={k.key}
+              type="button"
+              onClick={() => requestLetter(k.key)}
+              disabled={busy}
+              className="ao-lift text-left"
+              style={{
+                background: P.card, border: `1px solid ${P.line}`, borderRadius: 12,
+                padding: "12px 14px", cursor: busy ? "wait" : "pointer",
+              }}
+            >
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: P.ink }}>{k.label}</div>
+              <div style={{ fontSize: 11.5, color: P.sub, marginTop: 2 }}>{k.why}</div>
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: P.sub, marginTop: 9 }}>
+          HR approves it, then the PDF appears below to download. Letters are generated
+          from your record each time, so they always carry today's date.
+        </div>
+      </Card>
+
       {/* ── History ── */}
       <Card
         title="My requests"
@@ -233,6 +286,13 @@ export default function MyRequests({ entitlementDays = 0 }) {
                     </span>
                     {r.payload?.leaveType && (
                       <span style={{ fontSize: 11.5, color: P.sub }}>{r.payload.leaveType}</span>
+                    )}
+                    {/* Which letter. Three approved rows all reading "HR letter"
+                        leaves three identical Download buttons to guess between. */}
+                    {r.payload?.kind && (
+                      <span style={{ fontSize: 11.5, color: P.sub }}>
+                        {LETTER_KINDS.find((k) => k.key === r.payload.kind)?.label ?? r.payload.kind}
+                      </span>
                     )}
                     <span className="flex-1" />
                     <span className="ao-mono" style={{ fontSize: 11, color: P.sub, whiteSpace: "nowrap" }}>
@@ -279,6 +339,20 @@ export default function MyRequests({ entitlementDays = 0 }) {
 
                 {r.status === "pending" && (
                   <BtnGhost onClick={() => withdraw(r.id)} icon={Undo2} disabled={busy}>Withdraw</BtnGhost>
+                )}
+                {r.type === "letterRequest" && r.status === "approved" && (
+                  <a
+                    href={`/api/letters/${r.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ao-disp uppercase tracking-wide font-semibold inline-flex items-center gap-1.5"
+                    style={{
+                      fontSize: 11, padding: "6px 12px", borderRadius: 9, textDecoration: "none",
+                      border: `1px solid ${P.green}`, color: P.green, background: P.greenWash,
+                    }}
+                  >
+                    <Download size={12} />Download
+                  </a>
                 )}
               </div>
             );
