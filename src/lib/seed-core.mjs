@@ -90,7 +90,11 @@ async function seedEmployees(prisma, { actorName, actorRole }) {
       type: r.stage === "Applicant" ? "NOTE" : "HIRED",
       title: r.stage === "Applicant" ? "Application received" : "Joined the company",
       detail: [r.jobTitle, r.department, r.account].filter(Boolean).join(" · "),
-      toVal: r.stage,
+      /* Deliberately no toVal. The seed knows each employee's *current* stage,
+         not the stage they were hired into — writing today's stage onto a
+         backdated hire event would claim someone was hired straight onto a PIP.
+         createEmployee does record toVal, because there the two genuinely
+         coincide. */
       actorName,
       actorRole,
     })),

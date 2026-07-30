@@ -13,7 +13,10 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { nextEmpId, checkTransition, stageChangeEvent, probationEnd, subordinateIds } from "./employee.js";
+import {
+  nextEmpId, checkTransition, stageChangeEvent, probationEnd, subordinateIds, annualEntitlement,
+} from "./employee.js";
+import { todayStr } from "./dates.js";
 import { buildEmployeeQuery } from "./employees-query.js";
 
 export type Actor = { id?: string; name: string; role: string };
@@ -65,6 +68,18 @@ export const PROFILE_SELECT = {
 } satisfies Prisma.EmployeeSelect;
 
 /**
+ * Leave entitlement is computed here rather than in the browser.
+ *
+ * Art. 47 has an age-50 route to the top tier, so the calculation needs a
+ * birth date — and a directory listing has no business shipping birth dates to
+ * every client just to derive one integer. Computing it server-side keeps the
+ * date out of the payload and keeps one implementation of the rule.
+ */
+function withDerived<T extends { hireDate: string }>(row: T, birthDate: string, asOf: string) {
+  return { ...row, entitlementDays: annualEntitlement({ hireDate: row.hireDate, birthDate }, asOf) };
+}
+
+/**
  * A page of the directory. `scopeIds` is the caller's visibility ceiling and is
  * enforced in SQL, not after the fact — filtering a page in JS would silently
  * return short pages and leak the total count.
@@ -78,11 +93,16 @@ export async function listEmployees(opts: Parameters<typeof buildEmployeeQuery>[
       orderBy: orderBy as Prisma.EmployeeOrderByWithRelationInput[],
       skip,
       take,
-      select: DIRECTORY_SELECT,
+      // birthDate is selected for the entitlement calculation and stripped
+      // below — it never reaches the response.
+      select: { ...DIRECTORY_SELECT, birthDate: true },
     }),
     prisma.employee.count({ where: w }),
   ]);
-  return { employees: rows, total, page, pageSize };
+
+  const asOf = todayStr();
+  const employees = rows.map(({ birthDate, ...row }) => withDerived(row, birthDate, asOf));
+  return { employees, total, page, pageSize };
 }
 
 /** Ids and manager links only — enough to compute the visibility subtree. */
@@ -107,8 +127,10 @@ export async function visibilityScope(actor: Actor & { id?: string }): Promise<s
   return [me.id, ...subordinateIds(me.id, graph)];
 }
 
-export function getEmployee(id: string) {
-  return prisma.employee.findUnique({ where: { id }, select: PROFILE_SELECT });
+export async function getEmployee(id: string) {
+  const row = await prisma.employee.findUnique({ where: { id }, select: PROFILE_SELECT });
+  // Same derivation as the directory, so the two screens can never disagree.
+  return row ? withDerived(row, row.birthDate, todayStr()) : null;
 }
 
 export function getEmployeeByUserId(userId: string) {
