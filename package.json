@@ -17,6 +17,7 @@
     "db:seed": "node prisma/seed.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "^3.0.3",
@@ -38,6 +39,7 @@
     "playwright-core": "^1.62.0",
     "prisma": "^7.8.0",
     "tailwindcss": "^4.3.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "undici": "^8.9.0"
   }
 }
