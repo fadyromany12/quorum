@@ -337,14 +337,25 @@ export function subordinateIds(rootId, all) {
   return out;
 }
 
+/* Roles whose remit is the whole operation rather than a branch of the org
+   chart. Scoping these to a reporting subtree does not make them safer, it makes
+   them useless: a WFM analyst watching real-time adherence across every account
+   typically has no direct reports at all, so a subtree scope would show them
+   themselves and nobody else. The people function is fleet-wide for the same
+   reason — it is not a branch of the hierarchy.
+
+   Kept in one place because employee-db mirrors it, and two copies of an
+   authorization list is one copy that will fall behind. */
+export const FLEET_WIDE_ROLES = ["SuperAdmin", "HRBusinessPartner", "WFM"];
+
 /**
- * Can `viewer` see `target`'s record? Managers see their own subtree; HR and
- * SuperAdmin see everyone. Deliberately a pure function of ids and role, so
- * every route shares one implementation. Authorization re-derived per endpoint
- * drifts, and the endpoint that drifts is the one nobody audited.
+ * Can `viewer` see `target`'s record? Managers see their own subtree; fleet-wide
+ * roles see everyone. Deliberately a pure function of ids and role, so every
+ * route shares one implementation. Authorization re-derived per endpoint drifts,
+ * and the endpoint that drifts is the one nobody audited.
  */
 export function canViewEmployee(viewerRole, viewerEmployeeId, targetId, all) {
-  if (["SuperAdmin", "HRBusinessPartner"].includes(viewerRole)) return true;
+  if (FLEET_WIDE_ROLES.includes(viewerRole)) return true;
   if (!viewerEmployeeId) return false;
   if (viewerEmployeeId === targetId) return true;
   return subordinateIds(viewerEmployeeId, all).includes(targetId);

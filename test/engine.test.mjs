@@ -205,6 +205,7 @@ const { agentMatches, agentKeyOf } = await import(`${LIB}/identity.js`);
 const { applyCompensation } = await import(`${LIB}/compensation.js`);
 const { parseCsv, parseDur, parseRtaDate, mapHeaders, assessRta, buildEntries, TEMPLATE_CSV } = await import(`${LIB}/rta.js`);
 const { can, TABS_FOR, ROLES, DEFAULT_PASSWORD, passwordProblem } = await import(`${LIB}/auth.js`);
+const { FLEET_WIDE_ROLES } = await import(`${LIB}/employee.js`);
 const bcrypt = (await import("bcryptjs")).default;
 
 console.log("\n── Agent identity (empId OR email) ──");
@@ -316,7 +317,14 @@ console.log("\n── RBAC + password hashing ──");
 {
   eq("six roles incl. Agent", [ROLES.length, ROLES.includes("Agent")], [6, true]);
   eq("agents have no workspace tabs", TABS_FOR.Agent.length, 0);
-  eq("WFM sees only the RTA tab", TABS_FOR.WFM, ["rta"]);
+  // WFM owns real-time adherence, so the live floor is their primary screen —
+  // but they still never reach the case pipeline.
+  eq("WFM sees the floor and RTA, nothing else", TABS_FOR.WFM, ["floor", "rta"]);
+  eq("WFM still cannot touch cases", can({ role: "WFM" }, "caseWrite"), false);
+  // Fleet-wide roles are unscoped by design: a WFM analyst usually has no direct
+  // reports, so a subtree scope would show them themselves and nobody else.
+  eq("WFM is fleet-wide for visibility", FLEET_WIDE_ROLES.includes("WFM"), true);
+  eq("a lead is not fleet-wide", FLEET_WIDE_ROLES.includes("OperationsLead"), false);
   eq("only agents may acknowledge", [can({ role: "Agent" }, "acknowledge"), can({ role: "SuperAdmin" }, "acknowledge")], [true, false]);
   eq("only SuperAdmin administers", [can({ role: "SuperAdmin" }, "admin"), can({ role: "HRBusinessPartner" }, "admin")], [true, false]);
   eq("HR executes, OPS doesn't", [can({ role: "HRBusinessPartner" }, "hr"), can({ role: "OperationsLead" }, "hr")], [true, false]);

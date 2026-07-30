@@ -15,6 +15,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import {
   nextEmpId, checkTransition, stageChangeEvent, probationEnd, subordinateIds, annualEntitlement,
+  FLEET_WIDE_ROLES,
 } from "./employee.js";
 import { todayStr } from "./dates.js";
 import { buildEmployeeQuery } from "./employees-query.js";
@@ -119,7 +120,7 @@ export function loadOrgGraph() {
  * direction. buildEmployeeQuery treats an empty array as a real, empty scope.
  */
 export async function visibilityScope(actor: Actor & { id?: string }): Promise<string[] | null> {
-  if (actor.role === "SuperAdmin" || actor.role === "HRBusinessPartner") return null;
+  if (FLEET_WIDE_ROLES.includes(actor.role)) return null;
   if (!actor.id) return [];
   const me = await prisma.employee.findUnique({ where: { userId: actor.id }, select: { id: true } });
   if (!me) return [];

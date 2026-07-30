@@ -19,6 +19,7 @@ import {
   CheckCheck,
   Users,
   IdCard,
+  MonitorPlay,
   Table2,
   UserCog,
   Settings2,
@@ -58,10 +59,12 @@ import UserManagement from "./UserManagement.jsx";
 import SettingsView from "./SettingsView.jsx";
 import AuditTrail from "./AuditTrail.jsx";
 import People from "./People.jsx";
+import FloorView from "./FloorView.jsx";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "people", label: "People", icon: IdCard },
+  { id: "floor", label: "Floor", icon: MonitorPlay },
   { id: "log", label: "Daily log", icon: ClipboardPlus },
   { id: "rta", label: "RTA upload", icon: UploadCloud },
   { id: "triage", label: "Triage gate", icon: Inbox, badge: "review" },
@@ -224,7 +227,7 @@ export default function Workspace({ initial, me, themeIntent }) {
   // "people" is in this list for a different reason than the rest: the others
   // are admin screens, but the directory genuinely has its own data source and
   // is meaningful with an empty case ledger.
-  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "dcm", "rta", "users", "people"].includes(tab);
+  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "dcm", "rta", "users", "people", "floor"].includes(tab);
 
   return (
     <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
@@ -510,6 +513,9 @@ export default function Workspace({ initial, me, themeIntent }) {
             {/* The directory is independent of the case ledger — an org with no
                 violations logged still has people in it. */}
             {tab === "people" && <People accounts={data.accounts} />}
+
+            {/* Live attendance, independent of the case ledger like the directory. */}
+            {tab === "floor" && can(me, "floorView") && <FloorView accounts={data.accounts} />}
 
             {tab === "agents" && !empty && <AgentProfiles entries={data.entries} accounts={data.accounts} />}
 
