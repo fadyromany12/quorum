@@ -1,9 +1,10 @@
 /* Employment lifecycle, service maths, leave entitlement and org-tree walks.
 
-   Several cases here exist specifically because the KOMPASS prototype got them
-   wrong: string/Date coupling in accrual, placeholder ids parsing as real ones,
-   an unguarded recursive hierarchy walk, and top-tier entitlement ignoring the
-   age-50 route in Art. 47. Each is pinned below. */
+   The cases worth reading are the ones pinning failures that are silent rather
+   than loud: date/string coupling in accrual, placeholder ids reserving numbers
+   they do not own, an org-chart cycle hanging a tree walk, and Art. 47's age-50
+   route to the top tier being missed. None of these throw; they all just produce
+   a plausible wrong answer. */
 
 const LIB = "../src/lib";
 const E = await import(`${LIB}/employee.js`);
@@ -43,8 +44,8 @@ eq("exited does not count", E.isHeadcount("Exited"), false);
 eq("suspended is not working", E.isWorking("Suspended"), false);
 
 console.log("\n── Service maths ──");
-// The KOMPASS bug: hireDate arrived as a string and .getTime() threw, silently,
-// for every employee. These take plain calendar days and must never throw.
+// Calendar days in, numbers out — and never a throw. A Date/string mix-up here
+// fails at the call site, where a defensive catch turns it into a silent zero.
 eq("exactly one year", E.completedYears("2025-01-01", "2026-01-01"), 1);
 eq("a day short of a year", E.completedYears("2025-01-02", "2026-01-01"), 0);
 eq("ten years", E.completedYears("2016-01-01", "2026-01-01"), 10);
@@ -62,7 +63,7 @@ eq("just under a year: base tier", at("2025-02-01"), 15);
 eq("one full year: 21 days", at("2025-01-01"), 21);
 eq("nine years: still 21", at("2017-01-01"), 21);
 eq("ten years: 30 days", at("2016-01-01"), 30);
-// KOMPASS only ever checked service years, so a late-career hire was stuck at 21.
+// Service years alone would leave a late-career hire capped at 21 days.
 eq("age 50 reaches top tier on short service", at("2024-01-01", "1975-01-01"), 30);
 eq("age 49 does not", at("2024-01-01", "1977-06-01"), 21);
 eq("age route needs eligibility first", at("2025-12-01", "1970-01-01"), 0);
@@ -92,16 +93,16 @@ eq("only applies while on probation",
   E.probationDue({ stage: "Active", probationEnd: "2020-01-01" }, "2026-01-01"), false);
 
 console.log("\n── Employee ids ──");
-eq("first id starts the sequence", E.nextEmpId([]), "KOM-1001");
-eq("increments past the max", E.nextEmpId(["KOM-1001", "KOM-1007", "KOM-1003"]), "KOM-1008");
-eq("ignores unrelated formats", E.nextEmpId(["EG-9999", "1050", ""]), "KOM-1001");
-// KOMPASS used `!val.includes("PENDING")`, so "KOM-12-PENDING" parsed as 12 and
-// could collide with a real id. Only exact KOM-<digits> counts here.
-eq("placeholders never seed the sequence", E.nextEmpId(["KOM-2000-PENDING"]), "KOM-1001");
-eq("placeholder alongside a real id", E.nextEmpId(["KOM-1005", "KOM-9999-PENDING"]), "KOM-1006");
-eq("whitespace tolerated", E.nextEmpId([" KOM-1042 "]), "KOM-1043");
-eq("isEmpId accepts a real id", E.isEmpId("KOM-1001"), true);
-eq("isEmpId rejects a placeholder", E.isEmpId("KOM-1001-PENDING"), false);
+eq("first id starts the sequence", E.nextEmpId([]), "EMP-1001");
+eq("increments past the max", E.nextEmpId(["EMP-1001", "EMP-1007", "EMP-1003"]), "EMP-1008");
+eq("ignores unrelated formats", E.nextEmpId(["EG-9999", "1050", ""]), "EMP-1001");
+// A substring check would read "EMP-12-PENDING" as 12, letting a placeholder
+// reserve a number it does not own. Only an exact EMP-<digits> match counts.
+eq("placeholders never seed the sequence", E.nextEmpId(["EMP-2000-PENDING"]), "EMP-1001");
+eq("placeholder alongside a real id", E.nextEmpId(["EMP-1005", "EMP-9999-PENDING"]), "EMP-1006");
+eq("whitespace tolerated", E.nextEmpId([" EMP-1042 "]), "EMP-1043");
+eq("isEmpId accepts a real id", E.isEmpId("EMP-1001"), true);
+eq("isEmpId rejects a placeholder", E.isEmpId("EMP-1001-PENDING"), false);
 
 console.log("\n── Display name ──");
 eq("prefers the preferred name",
@@ -117,7 +118,7 @@ eq("single approver when they are the same person",
   E.approvalChain({ directManagerId: "d1", functionalManagerId: "d1" }), { ok: true, chain: ["d1"] });
 eq("single approver when no functional manager",
   E.approvalChain({ directManagerId: "d1" }), { ok: true, chain: ["d1"] });
-// The KOMPASS gate that stopped requests routing to a manager called "NA".
+// Without this gate, a request routes to nobody and sits invisible.
 eq("no direct manager blocks submission",
   E.approvalChain({ functionalManagerId: "f1" }),
   { ok: false, reason: "No direct manager assigned — assign one before requesting leave." });
@@ -151,8 +152,8 @@ console.log("\n── Org tree ──");
   eq("no employee record sees nothing", E.canViewEmployee("OperationsLead", null, "agentA", all), false);
 }
 {
-  // A cycle in the org chart must terminate. The KOMPASS hierarchy walk had no
-  // such guard, so one bad manager assignment would hang the request.
+  // A cycle in the org chart must terminate rather than hang the request. Org
+  // data is hand-maintained; one bad manager assignment is enough.
   const cyc = [
     { id: "a", directManagerId: "b" },
     { id: "b", directManagerId: "a" },

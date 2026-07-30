@@ -1,9 +1,8 @@
 /* The directory query builder.
 
-   The cases that matter most here are the visibility ones. A scope filter that
-   can be widened by a query parameter, or an empty scope that falls back to
-   "everything", is the exact shape of the authorization bug that let the Apps
-   Script prototype's registration approval run unguarded. */
+   The cases that matter most here are the visibility ones. A scope filter a
+   query parameter can widen, or an empty scope that degrades to "everything",
+   both fail open — and a filter that fails open is not a filter. */
 
 const { buildEmployeeQuery, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE } =
   await import("../src/lib/employees-query.js");

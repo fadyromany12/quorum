@@ -193,7 +193,10 @@ model Case {
 // to pull an IBAN.
 model Employee {
   id    String @id @default(cuid())
-  // Human-facing payroll identifier, "KOM-1001". Unique and never reused.
+  // Human-facing payroll identifier, e.g. "EMP-1001". The format is company
+  // policy (see EMP_ID_POLICY); this column only guarantees uniqueness, because
+  // a real deployment carries historical ids in whatever scheme preceded it.
+  // Never reused — payroll and disciplinary history point at it.
   empId String @unique
 
   // Bilingual by requirement, not decoration: Egyptian payroll, social
@@ -222,7 +225,7 @@ model Employee {
   // Reporting lines. Three separate links because BPO org charts genuinely
   // need them: the Direct manager owns the person, the Functional manager owns
   // the client account, and Dotted is advisory. Leave approval routes through
-  // Functional first when it differs from Direct — ported from KOMPASS.
+  // Functional first when it differs from Direct.
   directManagerId     String?
   directManager       Employee?  @relation("DirectReports", fields: [directManagerId], references: [id], onDelete: SetNull)
   directReports       Employee[] @relation("DirectReports")
@@ -301,9 +304,9 @@ model EmployeePII {
   updatedAt DateTime @updatedAt
 }
 
-// Family members, for medical enrolment. A real table rather than the JSON
-// blob KOMPASS used — that blob is exactly what the off-by-one column read
-// silently destroyed, and it can't be queried for insurance headcount.
+// Family members, for medical enrolment. A real table rather than a JSON blob:
+// a blob cannot be queried for insurance headcount, cannot be constrained, and
+// hides its own corruption until someone reads it back.
 model Dependent {
   id         String   @id @default(cuid())
   employeeId String

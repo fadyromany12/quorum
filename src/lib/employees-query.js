@@ -2,9 +2,9 @@
    without a database and cannot silently diverge from what the route sends.
 
    Same contract as buildCaseQuery in entries-query.js: the database does the
-   filtering, ordering and slicing. Nothing here ever ships an unbounded read,
-   because "load every employee then filter in JS" is precisely how the Apps
-   Script prototype ended up scanning whole sheets 71 separate times. */
+   filtering, ordering and slicing. Nothing here ever ships an unbounded read —
+   "load every employee, then filter in JS" is cheap at twenty rows and a
+   full-table scan per request at twenty thousand. */
 
 export const MAX_PAGE_SIZE = 200;
 export const DEFAULT_PAGE_SIZE = 50;

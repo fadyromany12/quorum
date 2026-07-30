@@ -114,9 +114,9 @@ export function loadOrgGraph() {
  * The set of employee ids this actor may see, or null for unrestricted.
  *
  * Returning `[]` rather than null for a manager with no employment record is
- * deliberate: "sees nothing" and "sees everything" must never be the same value,
- * which is the shape of bug that let the prototype's registration approval run
- * unguarded. buildEmployeeQuery treats an empty array as a real, empty scope.
+ * deliberate: "sees nothing" and "sees everything" must never be the same value.
+ * A falsy check cannot tell them apart, and gets it wrong in the unsafe
+ * direction. buildEmployeeQuery treats an empty array as a real, empty scope.
  */
 export async function visibilityScope(actor: Actor & { id?: string }): Promise<string[] | null> {
   if (actor.role === "SuperAdmin" || actor.role === "HRBusinessPartner") return null;
@@ -210,14 +210,14 @@ const UNIQUE_VIOLATION = "P2002";
 const EMP_ID_ATTEMPTS = 5;
 
 /**
- * Create an employee, allocating the next KOM-#### id.
+ * Create an employee, allocating the next sequential id.
  *
  * The id is derived from the existing set rather than a counter column because
- * the sequence has to stay compatible with ids already issued by the Apps
- * Script prototype, and lexicographic ordering on the string would break at the
- * 9999→10000 boundary. Only the empId column is fetched, and the race is closed
- * by retrying on the unique violation instead of trusting the read — a
- * read-then-write cannot be made safe by reading more carefully.
+ * any real deployment inherits historical ids it did not mint, and `ORDER BY`
+ * on the string would break at the 9999→10000 boundary. Only the empId column is
+ * fetched, and the race is closed by retrying on the unique violation rather
+ * than trusting the read — a read-then-write cannot be made safe by reading
+ * more carefully.
  */
 export async function createEmployee(
   data: Omit<Prisma.EmployeeUncheckedCreateInput, "empId"> & { empId?: string },

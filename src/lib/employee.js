@@ -1,20 +1,20 @@
 /* Employment lifecycle — pure functions, no I/O.
 
-   Ported from the KOMPASS Apps Script prototype, with its two silent failures
-   fixed rather than carried over:
+   Two rules this module holds to, because getting either wrong is silent and
+   expensive:
 
-     1. Accrual there computed service years as `today.getTime() - hiringDate.getTime()`
-        where hiringDate was a *string*. That throws for every employee, and the
-        throw was swallowed by a try/catch — so nobody ever accrued a day of
-        annual leave. Here dates are calendar days handled by src/lib/dates.js,
-        and entitlement is a pure function of two days with no Date coupling.
+     · Dates are plain calendar days (see src/lib/dates.js), never Date objects
+       or timestamps. Entitlement and service are functions of two day-strings.
+       Mixing the two types is how leave accrual quietly stops working: a string
+       has no .getTime(), the call throws, and a defensive catch swallows it.
 
-     2. Column indexes were resolved as `colIdx["AnnualBalance"] || 7`, which
-        silently reads the wrong column whenever the header sits at index 0.
-        Nothing in this module addresses columns by position at all.
+     · Nothing addresses data by position. Every field is named. Positional
+       access — an index, an offset, a column number — fails silently the moment
+       the shape changes, and produces a plausible wrong number rather than an
+       error.
 
    Everything here is deterministic and takes `asOf` explicitly, so tests never
-   depend on the clock. */
+   depend on the clock and point-in-time reporting is possible by construction. */
 
 import { daysBetween, parseDay, addDays, toDay } from "./dates.js";
 
@@ -147,8 +147,8 @@ export function ageAt(birthDate, asOf) {
 
      • 21 days once a full year of service is complete;
      • 15 days before that, from the six-month eligibility point;
-     • 30 days after ten years' service — *or* on reaching age 50, which the
-       KOMPASS version omitted entirely. Both are honoured here.
+     • 30 days after ten years' service — *or* on reaching age 50. Two
+       independent routes to the same tier; both are honoured here.
 
    Tiers are parameters, not literals: this is company policy layered on a
    statutory floor, and policy changes without the law changing. */
@@ -223,28 +223,43 @@ export function probationDue(employee, asOf) {
 
 /* ── Identity ──────────────────────────────────────────────────────────────*/
 
-export const EMP_ID_PREFIX = "KOM";
-const EMP_ID_RE = /^KOM-(\d+)$/;
+/* Employee-id format is company policy, not a constant. Every organisation has
+   its own scheme, and any real deployment inherits historical ids from whatever
+   came before — so the generator has to coexist with ids it did not mint rather
+   than assume it owns the whole space. */
+export const EMP_ID_POLICY = { prefix: "EMP", start: 1000, pad: 0 };
+
+const idPattern = (prefix) => new RegExp(`^${escapeRe(prefix)}-(\\d+)$`);
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * Next sequential employee id. KOMPASS scanned for the max and started at 1000;
- * the sequence is kept for continuity, but placeholders are ignored properly
- * (its `!val.includes("PENDING")` check let "KOM-12-PENDING" parse as 12) and
- * only exact KOM-<digits> counts.
- * @param {string[]} existing
+ * Next sequential employee id.
+ *
+ * Only ids matching the active policy's exact `PREFIX-<digits>` shape count
+ * toward the sequence. That matters for two reasons: legacy ids in another
+ * format must not perturb it, and a suffixed placeholder such as
+ * "EMP-2000-PENDING" must not be read as 2000 and reserve a number it does not
+ * own — a substring check would do exactly that.
+ *
+ * @param {string[]} existing every employee id currently in use
+ * @param {typeof EMP_ID_POLICY} [policy]
  */
-export function nextEmpId(existing = []) {
-  let max = 1000;
+export function nextEmpId(existing = [], policy = EMP_ID_POLICY) {
+  const re = idPattern(policy.prefix);
+  let max = policy.start;
   for (const raw of existing) {
-    const m = EMP_ID_RE.exec(String(raw ?? "").trim());
+    const m = re.exec(String(raw ?? "").trim());
     if (!m) continue;
     const n = Number(m[1]);
     if (Number.isFinite(n) && n > max) max = n;
   }
-  return `${EMP_ID_PREFIX}-${max + 1}`;
+  const next = String(max + 1).padStart(policy.pad || 0, "0");
+  return `${policy.prefix}-${next}`;
 }
 
-export const isEmpId = (v) => EMP_ID_RE.test(String(v ?? "").trim());
+/** True for an id this system would itself mint under the given policy. */
+export const isEmpId = (v, policy = EMP_ID_POLICY) =>
+  idPattern(policy.prefix).test(String(v ?? "").trim());
 
 /** Preferred name when set, else the English full name, else the work email. */
 export function displayName(e) {
@@ -256,10 +271,11 @@ export function displayName(e) {
 /**
  * Who must approve this employee's leave, in order.
  *
- * Ported from KOMPASS: the Functional (client-account) manager approves first
- * when they differ from the Direct manager, then the Direct manager. Its hard
- * gate is kept too — no Direct manager means no submission, which is what
- * stopped requests silently routing to "NA".
+ * The Functional (client-account) manager approves first when they differ from
+ * the Direct manager, then the Direct manager. Submission is refused outright
+ * when no Direct manager is assigned: routing to an absent approver produces a
+ * request that is neither pending nor rejected, and sits invisible until someone
+ * asks after it.
  *
  * @param {{directManagerId?: string|null, functionalManagerId?: string|null}} e
  * @returns {{ok: true, chain: string[]} | {ok: false, reason: string}}
@@ -276,8 +292,9 @@ export function approvalChain(e) {
 
 /**
  * Walk up the reporting line. Returns ids from the immediate manager upward.
- * Cycle-safe: a loop in the org chart terminates instead of hanging, which the
- * KOMPASS recursive hierarchy walk did not guard against.
+ * Cycle-safe: a loop in the org chart terminates instead of hanging. Org data
+ * is hand-maintained, so two people managing each other is a question of when,
+ * not if.
  * @param {string} employeeId
  * @param {Map<string, {directManagerId?: string|null}>} byId
  */
@@ -322,9 +339,9 @@ export function subordinateIds(rootId, all) {
 
 /**
  * Can `viewer` see `target`'s record? Managers see their own subtree; HR and
- * SuperAdmin see everyone. Deliberately a pure function of ids and role so it
- * can be unit-tested and reused by every route instead of being re-derived —
- * the inconsistency that left KOMPASS's registration approval unguarded.
+ * SuperAdmin see everyone. Deliberately a pure function of ids and role, so
+ * every route shares one implementation. Authorization re-derived per endpoint
+ * drifts, and the endpoint that drifts is the one nobody audited.
  */
 export function canViewEmployee(viewerRole, viewerEmployeeId, targetId, all) {
   if (["SuperAdmin", "HRBusinessPartner"].includes(viewerRole)) return true;

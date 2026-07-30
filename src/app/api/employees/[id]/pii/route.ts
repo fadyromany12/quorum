@@ -3,9 +3,9 @@
 
    Its own endpoint, its own permission, and every read writes an audit row
    before the data is returned. That is the point: an unaudited PII read is
-   indistinguishable from exfiltration after the fact, and in the Apps Script
-   prototype `getEmployeeData(email)` would hand any caller a National ID,
-   passport number and IBAN with no check and no trace. */
+   indistinguishable from exfiltration after the fact. A lookup keyed only on an
+   identifier, with no authorization and no trace, is an enumeration endpoint for
+   national IDs and bank accounts — so this one is neither. */
 
 import { NextResponse } from "next/server";
 import { requireRole, guarded, GuardError } from "@/lib/api-guard";

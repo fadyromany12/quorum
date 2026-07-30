@@ -4,8 +4,8 @@
    make one rule visible the moment the database is seeded:
 
      · hire dates land in each Art. 47 accrual tier (ineligible / 15 / 21 / 30)
-     · one employee reaches the 30-day tier by age rather than by service, which
-       is the branch the Apps Script prototype omitted
+     · one employee reaches the 30-day tier by age rather than by service — the
+       easily-missed second route in Art. 47
      · one sits mid-probation with a confirmation date already computed
      · one is on a PIP, one is serving notice, one has exited, one is a live
        applicant — so the lifecycle board is populated rather than all-Active
@@ -26,14 +26,14 @@ const YEAR = 365;
    linked to its login. */
 const STAFF = [
   {
-    empId: "KOM-1001", fullNameEn: "Fady Bekhet", fullNameAr: "فادي روماني بخيت",
+    empId: "EMP-1001", fullNameEn: "Fady Bekhet", fullNameAr: "فادي روماني بخيت",
     workEmail: "fady.bekhet@konecta.com", jobTitle: "Head of Workforce Compliance",
     department: "Workforce Management", grade: "M3", workSite: "Cairo GDC",
     hireDate: ago(YEAR * 6 + 40), birthDate: "1990-04-18", gender: "Male",
     stage: "Active", manager: null,
   },
   {
-    empId: "KOM-1002", fullNameEn: "Abdallah Ismail", fullNameAr: "عبدالله إسماعيل",
+    empId: "EMP-1002", fullNameEn: "Abdallah Ismail", fullNameAr: "عبدالله إسماعيل",
     workEmail: "abdallah.ismail@konecta.com", jobTitle: "HR Business Partner",
     department: "People", grade: "M2", workSite: "Cairo GDC",
     // Past ten years' service: the long-service tier by the ordinary route.
@@ -41,21 +41,21 @@ const STAFF = [
     stage: "Active", manager: "fady.bekhet@konecta.com",
   },
   {
-    empId: "KOM-1003", fullNameEn: "Mohamed Rashad", fullNameAr: "محمد رشاد",
+    empId: "EMP-1003", fullNameEn: "Mohamed Rashad", fullNameAr: "محمد رشاد",
     workEmail: "mohamed.rashad@konecta.com", jobTitle: "Operations Lead",
     department: "Operations", account: "Lenovo", lob: "EMEA", grade: "M1", workSite: "Cairo GDC",
     hireDate: ago(YEAR * 4 + 100), birthDate: "1992-01-27", gender: "Male",
     stage: "Active", manager: "fady.bekhet@konecta.com",
   },
   {
-    empId: "KOM-1004", fullNameEn: "Ibrahim Kamel", fullNameAr: "إبراهيم كامل",
+    empId: "EMP-1004", fullNameEn: "Ibrahim Kamel", fullNameAr: "إبراهيم كامل",
     workEmail: "ibrahim.kamel@konecta.com", jobTitle: "Project Manager",
     department: "Operations", account: "Hertz", lob: "North America", grade: "M1", workSite: "Cairo GDC",
     hireDate: ago(YEAR * 3 + 210), birthDate: "1989-11-05", gender: "Male",
     stage: "Active", manager: "fady.bekhet@konecta.com",
   },
   {
-    empId: "KOM-1005", fullNameEn: "Salma Elhadad", fullNameAr: "سلمى الحداد",
+    empId: "EMP-1005", fullNameEn: "Salma Elhadad", fullNameAr: "سلمى الحداد",
     workEmail: "salma.elhadad@konecta.com", jobTitle: "WFM Analyst",
     department: "Workforce Management", grade: "S3", workSite: "Cairo GDC",
     hireDate: ago(YEAR * 2 + 30), birthDate: "1995-06-14", gender: "Female",
@@ -160,7 +160,7 @@ const EDGES = [
     manager: "ibrahim.kamel@konecta.com",
   },
   {
-    empId: "KOM-1006", fullNameEn: "Peter Wahba", fullNameAr: "بيتر وهبة",
+    empId: "EMP-1006", fullNameEn: "Peter Wahba", fullNameAr: "بيتر وهبة",
     workEmail: "peter.wahba@konecta.com", jobTitle: "Customer Service Agent",
     department: "Operations", account: "Lenovo", lob: "EMEA", grade: "A1",
     // No hire date: an applicant has not been given one yet.
