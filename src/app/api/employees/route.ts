@@ -15,8 +15,15 @@ export const GET = guarded(async (req: Request) => {
   const actor = await requireRole("employeeRead");
   const p = new URL(req.url).searchParams;
 
-  const stage = p.get("stage") || undefined;
-  if (stage && !isStage(stage)) throw new GuardError(400, `Unknown stage "${stage}".`);
+  /* One stage, or several comma-separated — the journey views ask for a set
+     ("joining" is Applicant, Onboarding and Probation) and splitting that into
+     three requests would be three screens for one question. */
+  const stageParam = p.get("stage") || "";
+  const stages = stageParam.split(",").map((s) => s.trim()).filter(Boolean);
+  for (const s of stages) {
+    if (!isStage(s)) throw new GuardError(400, `Unknown stage "${s}".`);
+  }
+  const stage = stages.length ? stages : undefined;
 
   const result = await listEmployees({
     q: p.get("q") || undefined,

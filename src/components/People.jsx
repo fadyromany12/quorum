@@ -145,7 +145,18 @@ function PersonCard({ employee, managerName, onOpen }) {
   );
 }
 
-export default function People({ accounts = [], me = null }) {
+/**
+ * The directory, and the journey views built on it.
+ *
+ * `stages` narrows the whole screen to one phase of employment — the "New
+ * joiners" and "Leavers" screens are this component with a preset rather than
+ * two more implementations of search, paging and the profile view. Inside a
+ * preset the chips filter *within* the phase, so a stage outside it can never
+ * be reached by accident.
+ */
+export default function People({
+  accounts = [], me = null, stages = null, heading = "People", blurb = "",
+}) {
   const [rows, setRows] = useState(null); // null = loading
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -171,7 +182,11 @@ export default function People({ accounts = [], me = null }) {
   }, [q]);
 
   // Any filter change invalidates the current page number.
-  useEffect(() => setPage(1), [debouncedQ, account, stage, includeExited]);
+  /* Keyed on the preset's *contents*, not the array's identity. A parent that
+     builds the list inline hands over a new array every render, and an effect
+     that depends on the reference would re-fire forever. */
+  const stageKey = (stages ?? []).join(",");
+  useEffect(() => setPage(1), [debouncedQ, account, stage, includeExited, stageKey]);
 
   /* Guards against a slow early request landing after a fast later one and
      overwriting it with stale rows. */
@@ -183,7 +198,11 @@ export default function People({ accounts = [], me = null }) {
     const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
     if (debouncedQ) params.set("q", debouncedQ);
     if (account !== "All") params.set("account", account);
+    /* A chip narrows within the phase; with no chip the whole phase is asked
+       for. The preset is never dropped — that is what makes it a preset and not
+       a default. */
     if (stage !== "All") params.set("stage", stage);
+    else if (stageKey) params.set("stage", stageKey);
     if (includeExited) params.set("includeExited", "1");
 
     try {
@@ -203,7 +222,7 @@ export default function People({ accounts = [], me = null }) {
       setError(err.message);
       setRows([]);
     }
-  }, [page, debouncedQ, account, stage, includeExited]);
+  }, [page, debouncedQ, account, stage, includeExited, stageKey]);
 
   useEffect(() => {
     load();
@@ -247,7 +266,7 @@ export default function People({ accounts = [], me = null }) {
       title={
         <span className="inline-flex items-center gap-2">
           <Users size={14} />
-          People
+          {heading}
         </span>
       }
       right={
@@ -268,6 +287,10 @@ export default function People({ accounts = [], me = null }) {
         </div>
       }
     >
+      {blurb && (
+        <div className="mb-3" style={{ fontSize: 12, color: P.sub }}>{blurb}</div>
+      )}
+
       {/* ── Filters ── */}
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <div
@@ -311,7 +334,7 @@ export default function People({ accounts = [], me = null }) {
         >
           All
         </button>
-        {STAGES.filter((s) => s !== "Exited").map((s) => {
+        {(stages ?? STAGES.filter((s) => s !== "Exited")).map((s) => {
           const meta = STAGE_STYLE[s];
           const on = stage === s;
           return (

@@ -32,6 +32,23 @@ eq("both flags drop the stage filter entirely",
 eq("an explicit stage wins over the default hiding",
   buildEmployeeQuery({ stage: "Exited" }).where.stage, "Exited");
 
+/* The journey views ask for a set of stages at once — "joining" is Applicant,
+   Onboarding and Probation together. A view built to show applicants must not
+   have applicants hidden from under it by the default. */
+eq("a set of stages becomes an IN filter",
+  buildEmployeeQuery({ stage: ["Applicant", "Onboarding", "Probation"] }).where.stage,
+  { in: ["Applicant", "Onboarding", "Probation"] });
+eq("a one-element set is the same as naming it",
+  buildEmployeeQuery({ stage: ["Exited"] }).where.stage, "Exited");
+eq("a set overrides the default hiding of applicants",
+  buildEmployeeQuery({ stage: ["Applicant"] }).where.stage, "Applicant");
+eq("and of exited records",
+  buildEmployeeQuery({ stage: ["Notice", "Exited"] }).where.stage, { in: ["Notice", "Exited"] });
+eq("an empty set falls back to the default",
+  buildEmployeeQuery({ stage: [] }).where.stage, { notIn: ["Exited", "Applicant"] });
+eq("blanks inside a set are dropped",
+  buildEmployeeQuery({ stage: ["Notice", "", null] }).where.stage, "Notice");
+
 console.log("\n── Filters ──");
 eq("account", buildEmployeeQuery({ account: "Lenovo" }).where.account, "Lenovo");
 eq("department", buildEmployeeQuery({ department: "Operations" }).where.department, "Operations");

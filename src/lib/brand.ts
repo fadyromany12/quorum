@@ -5,7 +5,12 @@ export const BRAND = {
   name: "Quorum",
   /** Lowercase wordmark form, per the identity spec. */
   wordmark: "quorum",
-  tagline: "Workforce compliance — present and accounted for",
+  /* The tagline names what the product is for. It used to say "workforce
+     compliance", which described the first version honestly and the current one
+     not at all — compliance is now one phase of four. */
+  tagline: "The employee journey, on one record",
+  /** Longer form, for the login screen and metadata. */
+  promise: "From offer to exit — joining, working, growing and leaving, all on one record",
   org: "Konecta GDC",
   /** The Signal: the one accent color. Violet, per the Quorum identity. */
   signal: "#8B5CF6",

@@ -33,6 +33,8 @@ import {
   CircleAlert,
   LogOut,
   X,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
 
 import { useServerData } from "../hooks/useServerData.js";
@@ -61,22 +63,28 @@ import AuditTrail from "./AuditTrail.jsx";
 import People from "./People.jsx";
 import FloorView from "./FloorView.jsx";
 import RequestInbox from "./RequestInbox.jsx";
+import { navFor, sectionOfTab, stagesOf } from "../lib/journey.js";
 
-const NAV = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "people", label: "People", icon: IdCard },
-  { id: "floor", label: "Floor", icon: MonitorPlay },
-  { id: "requests", label: "Requests", icon: Scale },
-  { id: "log", label: "Daily log", icon: ClipboardPlus },
-  { id: "rta", label: "RTA upload", icon: UploadCloud },
-  { id: "triage", label: "Triage gate", icon: Inbox, badge: "review" },
-  { id: "approvals", label: "Approvals", icon: CheckCheck, badge: "approvals" },
-  { id: "agents", label: "Agents", icon: Users },
-  { id: "audit", label: "Audit trail", icon: ScrollText },
-  { id: "dcm", label: "DCM matrix", icon: Table2 },
-  { id: "users", label: "Users", icon: UserCog },
-  { id: "settings", label: "Settings", icon: Settings2 },
-];
+/* What each screen is called and what it looks like. Where it sits is decided
+   by journey.js — this map is only the label and the icon, so renaming a screen
+   is one edit and moving it is another, independently. */
+const TAB_META = {
+  dashboard: { label: "Overview", icon: LayoutDashboard },
+  joining: { label: "New joiners", icon: UserPlus },
+  floor: { label: "Live floor", icon: MonitorPlay },
+  requests: { label: "Requests", icon: Scale },
+  approvals: { label: "My approvals", icon: CheckCheck, badge: "approvals" },
+  log: { label: "Log an event", icon: ClipboardPlus },
+  rta: { label: "Import adherence", icon: UploadCloud },
+  triage: { label: "Case review", icon: Inbox, badge: "review" },
+  agents: { label: "Scorecards", icon: Users },
+  leaving: { label: "Leavers", icon: UserMinus },
+  people: { label: "Directory", icon: IdCard },
+  audit: { label: "Audit trail", icon: ScrollText },
+  matrix: { label: "Discipline matrix", icon: Table2 },
+  users: { label: "Accounts", icon: UserCog },
+  settings: { label: "Settings", icon: Settings2 },
+};
 
 export default function Workspace({ initial, me, themeIntent }) {
   const {
@@ -225,11 +233,20 @@ export default function Workspace({ initial, me, themeIntent }) {
   });
 
   const badges = { review: pendingReview.length, approvals: pendingOps.length + pendingHr.length };
-  const nav = NAV.filter((n) => allowedTabs.includes(n.id));
+  /* Grouped by journey phase rather than listed flat. A flat list of fifteen
+     screens with the discipline matrix in the middle teaches a new user that
+     the product is about violations. */
+  /* Headcount comes from the server already scoped to what this actor may see,
+     so a lead's tiles and the screens they link to cannot disagree. */
+  const headcount = data.headcount ?? {};
+  const inPhase = (id) => stagesOf(id).reduce((n, st) => n + (headcount[st] ?? 0), 0);
+
+  const nav = navFor(allowedTabs, TAB_META);
+  const section = sectionOfTab(tab);
   // "people" is in this list for a different reason than the rest: the others
   // are admin screens, but the directory genuinely has its own data source and
   // is meaningful with an empty case ledger.
-  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "dcm", "rta", "users", "people", "floor", "requests"].includes(tab);
+  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "joining", "leaving", "floor", "requests"].includes(tab);
 
   return (
     <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
@@ -240,7 +257,7 @@ export default function Workspace({ initial, me, themeIntent }) {
       >
         <div className="mx-auto px-4 py-4" style={{ maxWidth: 1320 }}>
           <div className="flex items-center gap-3 flex-wrap">
-            <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org} · DCM v1.0`} />
+            <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org}`} />
             <span className="flex-1" />
             <ThemeToggle initial={themeIntent} />
             <UserChip me={me} onLogout={() => signOut({ callbackUrl: "/login" })} />
@@ -307,9 +324,19 @@ export default function Workspace({ initial, me, themeIntent }) {
       <div className="mx-auto px-4 pb-16 flex gap-5 items-start" style={{ maxWidth: 1320 }}>
         {/* ── Sidebar (sticks below the glass header) ── */}
         <nav className="hidden md:block py-4" style={{ width: 190, flexShrink: 0, position: "sticky", top: 118 }}>
-          <div className="grid gap-1">
-            {nav.map((n) => (
-              <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
+          <div className="grid gap-3">
+            {nav.map((s) => (
+              <div key={s.id} className="grid gap-1">
+                <div
+                  className="ao-disp uppercase tracking-wide"
+                  style={{ fontSize: 9.5, color: P.sub, letterSpacing: 0.9, padding: "0 12px 2px", opacity: 0.75 }}
+                >
+                  {s.label}
+                </div>
+                {s.items.map((n) => (
+                  <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
+                ))}
+              </div>
             ))}
           </div>
           {can(me, "log") && (
@@ -331,31 +358,54 @@ export default function Workspace({ initial, me, themeIntent }) {
         <main className="flex-1 min-w-0 pb-4">
           {/* Mobile nav */}
           <div className="md:hidden flex gap-2 overflow-x-auto mt-4 pb-1">
-            {nav.map((n) => (
+            {nav.flatMap((s) => s.items).map((n) => (
               <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
             ))}
           </div>
 
           {/* KPI scorecard — noise for WFM, whose whole job here is the upload */}
           {me.role !== "WFM" && (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
-              <KPI label="Disciplinary cases" value={disciplinaryCount} icon={ShieldAlert} tone={disciplinaryCount ? P.brick : P.green} />
-              <KPI label="Total hours lost" value={hoursLost} format={(n) => fmtMin(Math.round(n))} icon={Clock3} tone={hoursLost ? P.brick : P.green} />
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mt-4">
+              {/* Where people are in the journey, first — the strip sits above
+                  every screen, so it sets what the product appears to be about.
+                  Conduct keeps a tile because it is real work; it is no longer
+                  the first four. */}
+              <KPI label="Headcount" value={inPhase("work")} icon={Users} tone={P.petrol} />
               <KPI
-                label="Pending triage review"
-                value={pendingReview.length}
-                icon={Inbox}
-                tone={pendingReview.length ? P.petrol : P.green}
+                label="Joining"
+                value={inPhase("join")}
+                icon={UserPlus}
+                tone={inPhase("join") ? P.petrol : P.sub}
+                onClick={allowedTabs.includes("joining") ? () => goTab("joining") : undefined}
+              />
+              <KPI
+                label="On a plan"
+                value={inPhase("grow")}
+                icon={TriangleAlert}
+                tone={inPhase("grow") ? P.amber : P.green}
                 onClick={allowedTabs.includes("triage") ? () => goTab("triage") : undefined}
               />
               <KPI
-                label="Active escalations"
+                label="Leaving"
+                value={headcount.Notice ?? 0}
+                icon={UserMinus}
+                tone={(headcount.Notice ?? 0) ? P.amber : P.green}
+                onClick={allowedTabs.includes("leaving") ? () => goTab("leaving") : undefined}
+              />
+              <KPI
+                label="Open cases"
+                value={pendingReview.length}
+                icon={Inbox}
+                tone={pendingReview.length ? P.brick : P.green}
+                onClick={allowedTabs.includes("triage") ? () => goTab("triage") : undefined}
+              />
+              <KPI
+                label="Awaiting you"
                 value={activeEscalations}
-                icon={TriangleAlert}
+                icon={CheckCheck}
                 tone={activeEscalations ? P.amber : P.green}
                 onClick={allowedTabs.includes("approvals") ? () => goTab("approvals") : undefined}
               />
-              <KPI label="Deduction pool" value={deductionPool} format={(n) => `${Math.round(n)}d`} icon={Scale} tone={deductionPool ? P.ink : P.green} />
             </div>
           )}
 
@@ -516,6 +566,28 @@ export default function Workspace({ initial, me, themeIntent }) {
                 violations logged still has people in it. */}
             {tab === "people" && <People accounts={data.accounts} me={me} />}
 
+            {/* The two ends of the journey. Same directory, filtered to the
+                stages that phase covers — a separate component would be a
+                second implementation of search, paging and the profile view. */}
+            {tab === "joining" && (
+              <People
+                accounts={data.accounts}
+                me={me}
+                stages={stagesOf("join")}
+                heading="New joiners"
+                blurb="Everyone between an accepted offer and a confirmed probation."
+              />
+            )}
+            {tab === "leaving" && (
+              <People
+                accounts={data.accounts}
+                me={me}
+                stages={stagesOf("leave")}
+                heading="Leavers"
+                blurb="Serving notice or already gone. Clearance lives on each record."
+              />
+            )}
+
             {/* Live attendance, independent of the case ledger like the directory. */}
             {tab === "floor" && can(me, "floorView") && <FloorView accounts={data.accounts} />}
 
@@ -527,7 +599,7 @@ export default function Workspace({ initial, me, themeIntent }) {
 
             {tab === "audit" && can(me, "audit") && <AuditTrail />}
 
-            {tab === "dcm" && can(me, "admin") && <DcmEditor dcm={data.dcm} onChange={setDcm} />}
+            {tab === "matrix" && can(me, "admin") && <DcmEditor dcm={data.dcm} onChange={setDcm} />}
 
             {tab === "users" && can(me, "admin") && (
               <UserManagement

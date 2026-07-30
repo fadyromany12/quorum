@@ -34,7 +34,7 @@ export default function LoginForm({ locale }: { locale: string }) {
   return (
     <div className="w-full max-w-md">
       <div className="mb-6 flex justify-center">
-        <Logo size={40} subtitle={`${BRAND.org} · ${BRAND.tagline}`} />
+        <Logo size={40} subtitle={`${BRAND.org} · ${BRAND.promise}`} />
       </div>
       <GlassCard glow="violet" className="gradient-hairline">
         <form onSubmit={submit} className="grid gap-4">

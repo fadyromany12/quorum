@@ -19,7 +19,7 @@ const display = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: `${BRAND.name} · ${BRAND.org}`,
-  description: `${BRAND.name} — ${BRAND.tagline}. Cases, DCM verdicts, approvals and digital acknowledgements.`,
+  description: `${BRAND.name} — ${BRAND.promise}. Records, attendance, approvals, leave, conduct and clearance.`,
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

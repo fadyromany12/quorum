@@ -36,12 +36,20 @@ export function passwordProblem(pw) {
 /* What each staff role may see. Agents never reach the workspace at all —
    they live in /agent-portal, enforced by the route-group layouts. */
 export const TABS_FOR = {
-  SuperAdmin: ["dashboard", "people", "floor", "requests", "log", "rta", "triage", "approvals", "agents", "audit", "dcm", "users", "settings"],
+  SuperAdmin: [
+    "dashboard", "joining", "floor", "requests", "approvals", "log", "rta",
+    "triage", "agents", "leaving", "people", "audit", "matrix", "users", "settings",
+  ],
   // WFM owns real-time adherence, so the floor is their primary screen.
   WFM: ["floor", "rta"],
-  ProjectManager: ["dashboard", "people", "floor", "requests", "log", "triage", "agents"],
-  OperationsLead: ["dashboard", "people", "floor", "requests", "approvals", "agents"],
-  HRBusinessPartner: ["dashboard", "people", "floor", "requests", "approvals", "agents", "audit"],
+  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "triage", "agents", "leaving", "people"],
+  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "agents", "leaving", "people"],
+  /* HR owns both ends of the journey — admitting people and exiting them — so
+     joining and leaving are theirs before anyone else's. */
+  HRBusinessPartner: [
+    "dashboard", "joining", "floor", "requests", "approvals",
+    "triage", "agents", "leaving", "people", "audit",
+  ],
   Agent: [],
 };
 

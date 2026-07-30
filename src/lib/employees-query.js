@@ -27,7 +27,7 @@ const SORTS = {
  * @param {string} [opts.q] free text over name, employee id, work email, job title
  * @param {string} [opts.account]
  * @param {string} [opts.department]
- * @param {string} [opts.stage] exact EmploymentStage
+ * @param {string|string[]} [opts.stage] one EmploymentStage, or a set of them
  * @param {string} [opts.managerId] direct reports of this employee only
  * @param {string[]} [opts.scopeIds] hard visibility ceiling — when present the
  *   result can never include an id outside it, whatever the other filters say
@@ -53,10 +53,17 @@ export function buildEmployeeQuery(opts = {}) {
   if (department) where.department = department;
   if (managerId) where.directManagerId = managerId;
 
-  if (stage) {
-    // An explicit stage filter is the caller being specific; honour it even
-    // when it names a stage the default view hides.
-    where.stage = stage;
+  /* A stage filter may name one stage or a set of them. The set is what the
+     journey views need: "joining" is Applicant, Onboarding and Probation
+     together, and asking for them one at a time is three screens for one
+     question. Either form is the caller being specific, so both override the
+     default hiding of archived and pre-hire records — a view built to show
+     applicants must not have applicants filtered out from under it. */
+  const stages = Array.isArray(stage) ? stage.filter(Boolean) : (stage ? [stage] : []);
+  if (stages.length === 1) {
+    where.stage = stages[0];
+  } else if (stages.length > 1) {
+    where.stage = { in: stages };
   } else {
     const hidden = [
       ...(includeExited ? [] : ARCHIVED_STAGES),
