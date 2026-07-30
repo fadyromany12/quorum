@@ -150,12 +150,35 @@ console.log("\n── Co-approval: neither can overrule ──");
   eq("and the request is approved", W.statusOf(r), "approved");
 }
 {
-  // Two approvals of *different* dates is not agreement.
+  /* Two approvals of *different* dates is not agreement. This block exists
+     because an earlier version counted approvals without comparing values, so a
+     disagreement reported as "approved" and settled instantly — which let the
+     requester's proposal win in silence and bypassed the whole agreement window.
+     Asserting agreement() alone did not catch it; the status has to be checked. */
   let r = mk("resignation", AGENT, { proposedValue: "2026-09-30" });
   r = W.decide(r, { approverId: "direct", actorId: "direct", decision: "approve", proposedValue: "2026-09-30" }, { today: T }).request;
   r = W.decide(r, { approverId: "dotted", actorId: "dotted", decision: "approve", proposedValue: "2026-10-15" }, { today: T }).request;
   eq("differing proposals are not agreement", W.agreement(r).agreed, false);
   eq("both values are reported", W.agreement(r).values.sort(), ["2026-09-30", "2026-10-15"]);
+  // The one that matters: everyone approved, but it must NOT be approved.
+  eq("a disagreement stays pending", W.statusOf(r), "pending");
+  eq("so the timeout can still break it", W.autoResolve({ ...r, raisedOn: ago(11) }, T).applies, true);
+  // Each approver gets their step back, because revising is the only way out
+  // short of waiting for the timeout.
+  eq("both steps become actionable again",
+    W.pendingSteps(r).map((s) => s.approverId).sort(), ["direct", "dotted"]);
+  // And one of them revising to match settles it.
+  const fixed = W.decide(r, { approverId: "dotted", actorId: "dotted", decision: "approve", proposedValue: "2026-09-30" }, { today: T }).request;
+  eq("revising to match settles it", W.statusOf(fixed), "approved");
+  eq("on the agreed value", W.agreement(fixed).value, "2026-09-30");
+  eq("and nothing is left waiting", W.pendingSteps(fixed).length, 0);
+}
+{
+  // A rejection by either co-approver ends it outright — there is nothing to agree.
+  let r = mk("resignation", AGENT, { proposedValue: "2026-09-30" });
+  r = W.decide(r, { approverId: "direct", actorId: "direct", decision: "reject", note: "Not accepted" }, { today: T }).request;
+  eq("a co-approval rejection is terminal", W.statusOf(r), "rejected");
+  eq("and leaves nothing actionable", W.pendingSteps(r).length, 0);
 }
 eq("approving a co-approval without proposing a value is refused",
   W.decide({ ...mk("resignation", AGENT), proposedValue: null },

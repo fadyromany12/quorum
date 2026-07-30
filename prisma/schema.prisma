@@ -273,6 +273,7 @@ model Employee {
   events       EmployeeEvent[]
   compensation CompensationRecord[]
   attendance   AttendanceEvent[]
+  requests     Request[]            @relation("RequestSubject")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -397,6 +398,124 @@ enum PunchType {
   LOGIN
   LOGOUT
   AUX
+}
+
+// ─── Requests and approvals ──────────────────────────────────────────────────
+//
+// One table for every request type — leave, overtime, transfer, resignation,
+// termination, no-show, pay change, letter. The rules live in
+// src/lib/workflow.js; per-type configuration there supplies the chain, the SLA
+// and the validation, so adding a type needs no migration.
+//
+// Note what is *not* here: a status column. Status is derived from the steps
+// (workflow.statusOf), because a status column and a step list can disagree, and
+// when they do it is the column that gets trusted and the steps that are right.
+//
+// `settledAt` is the one exception, and is not the same thing: a single nullable
+// instant meaning "no longer pending". It exists so "what is open?" is one
+// indexed predicate rather than a full scan — but it says only *whether* the
+// request is settled, never *how*, so it cannot contradict the steps.
+model Request {
+  id   String @id @default(cuid())
+  type String // leave | overtime | resignation | transfer | termination | noShow | payChange | letterRequest
+
+  // Who the request is about, and who raised it. Usually the same person, but
+  // not always: a manager raises a termination, and anyone may report a no-show.
+  subjectId  String
+  subject    Employee @relation("RequestSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  raisedById String
+  raisedOn   String   @default("") // YYYY-MM-DD, calendar day
+
+  // Type-specific fields. JSON on purpose: each type has a different shape, and
+  // a column per type would leave the table mostly null. Nothing here is
+  // queried — the indexed facts are all real columns.
+  payload Json @default("{}")
+
+  // For partial-capable types (leave in days, overtime in hours). Decimal
+  // rather than Int because half-days are ordinary.
+  requestedUnits Decimal? @db.Decimal(8, 2)
+
+  // For co-approval types: the value both approvers must agree on, seeded with
+  // what the requester proposed. That proposal is also the timeout default.
+  proposedValue String @default("")
+
+  settledAt      DateTime?
+  withdrawnAt    DateTime?
+  autoResolvedAt DateTime?
+
+  steps RequestStep[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The two questions asked constantly: "what is open?" and "what is open for
+  // this person?"
+  @@index([settledAt])
+  @@index([subjectId, settledAt])
+  @@index([raisedById, settledAt])
+  @@index([type, settledAt])
+}
+
+// One approver's slot in a request's chain. Ordered groups: every step sharing
+// an `order` is one unit of work, decided together (co-approval) or by whichever
+// approver acts first (`any`).
+model RequestStep {
+  id        String  @id @default(cuid())
+  requestId String
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  order      Int
+  kind       String // sequential | co | any
+  approverId String
+  // pending | approved | rejected | skipped. "skipped" is a step made
+  // irrelevant by someone else's decision — distinct from "rejected", because
+  // the approver never acted.
+  state      String @default("pending")
+
+  decidedAt   DateTime?
+  decidedById String?
+  note        String    @default("")
+
+  // Set when an approver grants fewer units than requested. The effective grant
+  // is the minimum across approvers, computed in the engine.
+  grantedUnits  Decimal? @db.Decimal(8, 2)
+  // This approver's proposal, for co-approval types. Agreement means every
+  // approver approved *and* proposed the same value.
+  proposedValue String   @default("")
+
+  createdAt DateTime @default(now())
+
+  // Drives the inbox: "which steps are waiting on me?"
+  @@index([approverId, state])
+  @@index([requestId, order])
+}
+
+// Standing or dated authority for one person to approve on another's behalf.
+//
+// Not an edge case: an approver going on leave and silently stalling everything
+// behind them is the most common complaint about systems like this. Blank dates
+// mean a standing arrangement that runs until revoked, which is the normal shape
+// for a permanent deputy.
+model Delegation {
+  id         String @id @default(cuid())
+  approverId String
+  delegateId String
+
+  // YYYY-MM-DD, both optional. Empty `from` means "already in force"; empty
+  // `to` means "until revoked".
+  from String @default("")
+  to   String @default("")
+
+  // Revoked rather than deleted: which decisions were taken under a delegation
+  // is part of the audit story.
+  revoked Boolean @default(false)
+  note    String  @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([approverId, revoked])
+  @@index([delegateId, revoked])
 }
 
 // ─── Attendance: login / logout / AUX ────────────────────────────────────────
