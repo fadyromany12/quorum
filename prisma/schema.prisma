@@ -61,6 +61,20 @@ enum ManagerKind {
   Dotted
 }
 
+// Why a compensation record exists. Drives the timeline wording, and separates
+// a genuine change from a fix to a previously mis-entered one — arrears are owed
+// for a Correction and not for a Merit increase, so the two must be
+// distinguishable without reading a free-text note.
+enum PayChangeReason {
+  Hire
+  Promotion
+  Merit
+  Adjustment
+  Demotion
+  Transfer
+  Correction
+}
+
 model User {
   id         String   @id @default(cuid())
   name       String
@@ -254,9 +268,10 @@ model Employee {
   userId String? @unique
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  pii        EmployeePII?
-  dependents Dependent[]
-  events     EmployeeEvent[]
+  pii          EmployeePII?
+  dependents   Dependent[]
+  events       EmployeeEvent[]
+  compensation CompensationRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -322,6 +337,59 @@ model Dependent {
   updatedAt DateTime @updatedAt
 
   @@index([employeeId])
+}
+
+// ─── Effective-dated compensation ────────────────────────────────────────────
+//
+// Pay is never updated in place. A change inserts a new version stamped with the
+// day it takes effect, and the series is the history — see src/lib/effective.js
+// for the full rationale and src/lib/comp.js for the money rules.
+//
+// Two dates, deliberately:
+//   effectiveFrom — when the figure applies in the world (a calendar day)
+//   recordedAt    — when this system was told (an instant)
+// A raise agreed in March and backdated to January has both, and payroll needs
+// both: January to compute what should have been paid, March to explain why the
+// arrears land in the March run. Conflating them makes retroactive corrections
+// unrepresentable.
+//
+// There is no effectiveTo. A version's validity ends where the next one begins,
+// so overlaps and gaps are impossible by construction rather than by constraint.
+// End dates are derived for display, never stored.
+//
+// Two versions may share an effectiveFrom; the later-recorded one governs. That
+// is how a wrong figure is corrected without destroying the evidence it was once
+// believed. Nothing is deleted — `voided` retracts an entry that should never
+// have existed.
+model CompensationRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  effectiveFrom String   @default("") // YYYY-MM-DD, calendar day (see Case.date)
+  recordedAt    DateTime @default(now())
+
+  // Decimal, not Float: money in binary floating point accumulates error, and
+  // an employee's salary is the last place to discover that. Scale 2 covers
+  // piastres; scale 14 leaves ample headroom for any currency.
+  baseSalary Decimal @db.Decimal(14, 2)
+  currency   String  @default("EGP")
+
+  reason PayChangeReason
+  note   String          @default("")
+
+  // Retraction, not deletion. A voided version is excluded from every
+  // calculation but stays readable, because "this figure was once believed" is
+  // itself a fact a payroll dispute may turn on.
+  voided Boolean @default(false)
+
+  actorName String @default("")
+  actorRole String @default("")
+
+  // Resolving "salary as of D" walks this employee's versions in date order,
+  // which is exactly what this index serves.
+  @@index([employeeId, effectiveFrom])
+  @@index([employeeId, recordedAt])
 }
 
 // The employee's timeline: one append-only row per thing that happened to them.
