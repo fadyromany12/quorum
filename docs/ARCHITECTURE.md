@@ -187,7 +187,117 @@ The current gaps, plainly:
 | Field-level encryption | Salary, national ID, IBAN are plaintext today | AES-GCM via a KMS-held key, on the PII and compensation tables. Blind index where lookup is genuinely needed. |
 | Observability | Errors are currently invisible in production | Error tracking plus a health endpoint. |
 
-### 4.6 Non-negotiables
+### 4.6 Three tiers of editability
+
+A record has fields with three different owners, and collapsing them into
+"editable" and "read-only" is what makes an HR portal either a data-quality
+disaster or a helpdesk queue.
+
+| Tier | Who writes it | Mechanism |
+|---|---|---|
+| **HR-held** | HR only | Employee sees it read-only and disputes it via a ticket, never edits it. Job title, salary, contract term, hire date. |
+| **Self-service, immediate** | The employee | Applies at once and is recorded. Address, mobile, emergency contact, qualification. |
+| **Self-service, verified** | The employee proposes; HR confirms | Submitted as a request, checked against a document, then applied. |
+
+The tier a field belongs to is decided by **what it controls**, not by how
+personal it feels:
+
+> **Any field that drives a computed entitlement or a payment destination is
+> verified, never immediate.**
+
+That test puts three fields in the verified tier that intuition would leave in
+the immediate one:
+
+- **Date of birth.** Art. 47 makes age 50 an independent route to the 30-day
+  annual-leave tier. A self-editable birth date is a self-service pay rise of
+  nine days' leave.
+- **Social insurance number** and **passport** — government identifiers that
+  appear on statutory filings.
+- **Bank account and IBAN** — the payment destination, and the obvious target
+  for anyone who compromises an account.
+
+Note that "verified" is not "slow". The employee submits once and sees the
+pending state; what it prevents is a silent, unattributed change to something
+that moves money.
+
+### 4.7 Workflow patterns that must be in the engine, not per feature
+
+Each of these is a real operational need that a naive "approve / reject"
+implementation cannot express:
+
+- **Partial approval.** An approver may grant fewer days than requested, and the
+  balance of the request stays available to the employee rather than being
+  consumed or lost.
+- **Co-approval with a timeout default.** Two managers must *agree* a value —
+  neither can overrule the other. If they have not agreed within a set window,
+  a stated default applies automatically. Without the default, a disagreement
+  deadlocks forever; without the equality, seniority silently decides.
+- **Withdrawal windows.** The requester may withdraw unilaterally for a period,
+  after which withdrawal itself needs approval.
+- **Delegation, including standing and open-ended.** With dates, or with no end
+  date until explicitly revoked.
+- **Sequenced clearance with dependencies.** Some steps cannot start until
+  others finish — equipment cannot be collected before handover is confirmed.
+- **Third-party initiation.** Some requests are raised by someone who is neither
+  the subject nor their manager. A no-show report is the clear case: whoever
+  noticed should be able to raise it.
+- **Consequence disclosure.** Any action with a side effect beyond itself states
+  that side effect at the point of submission — "this puts their payment on hold
+  and opens clearance". A confirmation dialogue that does not say what will
+  happen is not consent.
+
+### 4.8 Completeness as an incentive
+
+Rather than nagging people to complete their record, compute a completeness
+percentage from the fields that actually matter and attach a consequence to the
+ones that block downstream processing — an incomplete bank record genuinely
+cannot be paid, so saying so is accurate rather than coercive.
+
+Requirements: name the specific missing fields, never just the percentage; and
+only hold on fields that truly block, or the mechanism loses its credibility.
+
+### 4.9 Dispute channels on every computed number
+
+Every derived figure gets an explicit "this looks wrong" route that opens a
+ticket with the derivation attached. Leave balance, adherence, deduction,
+entitlement, final settlement.
+
+This is the practical companion to §4.3: explainability is what the employee
+reads, the dispute channel is what they do when they disagree. Without it the
+only escalation path is a message to a manager, which leaves no record and no
+trend.
+
+### 4.10 The agent clock is event-sourced
+
+Login, logout and every AUX change are append-only events. There is no "current
+status" column; the current state is derived from the last event.
+
+Three reasons, in order of how expensive they are to get wrong:
+
+- **Concurrency.** A double-tap, a request retried after a timeout, or a second
+  browser tab cannot corrupt a state they only append to. A read-modify-write on
+  a status column loses one of them silently — and at shift change that is
+  hundreds of agents writing in the same minute.
+- **Disputes.** "You were on break for forty minutes" has to be answerable with
+  the actual sequence months later, not with a number nobody can re-derive.
+- **Rule changes.** When a break policy changes, history is replayed under the
+  new rule rather than being wrong or needing a migration.
+
+Two rules follow from it:
+
+- **Instants are server-assigned.** A client clock can be wrong by hours, and it
+  can be set deliberately. The server stamps every punch.
+- **Local days are derived, never offset.** Egypt observes DST again, so a fixed
+  UTC offset is an hour out twice a year and mis-buckets any overnight shift
+  crossing the change. A shift is a pair of instants; the calendar day it belongs
+  to is computed in the operating time zone from the *session start*, so a night
+  shift stays one shift instead of splitting at midnight.
+
+Enforcement is reporting, not blocking: an agent already twenty minutes into a
+fifteen-minute break cannot be un-broken, and refusing their return punch would
+only make the overrun worse. The engine produces the evidence for a conversation.
+
+### 4.11 Non-negotiables
 
 - **Every mutation audited**, with actor, before/after and reason. Already true; keep it true.
 - **Soft delete only.** Employment records are legal records. Already the pattern for cases.
@@ -229,9 +339,14 @@ operation of this shape needs. Marked by whether it exists today.
 - ⬜ Probation review scheduled automatically from the hire date
 
 ### Time and attendance
+- ✅ Login/logout and AUX state engine, event-sourced (rules only)
+- ✅ Break compliance, occupancy, paid vs productive time
+- ✅ Adherence with lateness, and unscheduled time reported not credited
+- ✅ Overnight shifts and DST handled without special cases
+- ✅ Abandoned-session detection stamped at the deadline, not at sweep time
+- ⬜ Agent clock UI and real-time floor view
 - ⬜ Shift schedules, patterns, bulk import
-- ⬜ Clock in/out with AUX states
-- ⬜ Adherence measurement and exception review
+- ⬜ Adherence exception review queue
 - ⬜ Overtime request → approval → payroll feed
 - ⬜ Shift swaps between agents, manager-approved
 - ⬜ Project / billable hours
@@ -319,9 +434,16 @@ prove the foundations, and the one employees touch most.
 Employee portal proper: my profile, my balances, my documents, letter requests,
 helpdesk. Full onboarding with provisioning and automatic probation review.
 
-**Phase 4 — time and attendance**
-Schedules, clocking, adherence, overtime, swaps. Highest data volume; needs the
-job infrastructure from Phase 1 to be solid first.
+**Phase 4 — time and attendance (agent clock)**
+An eStart-equivalent: login/logout, AUX states, adherence, break compliance,
+overtime, shift swaps, schedules. The engine is built (src/lib/attendance.js);
+what remains is persistence, the agent-facing clock UI, the real-time floor view
+and the schedule import.
+
+Highest data volume in the system and the surface agents actually live in, so
+it carries the concurrency risk: at shift change, hundreds of agents punch
+within the same minute. That is why the model is append-only events with derived
+state and no mutable status column anywhere — see §4.11.
 
 **Phase 5 — compensation**
 Effective-dated pay, bands, review cycles, payslips, bank files, final

@@ -272,6 +272,7 @@ model Employee {
   dependents   Dependent[]
   events       EmployeeEvent[]
   compensation CompensationRecord[]
+  attendance   AttendanceEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -390,6 +391,62 @@ model CompensationRecord {
   // which is exactly what this index serves.
   @@index([employeeId, effectiveFrom])
   @@index([employeeId, recordedAt])
+}
+
+enum PunchType {
+  LOGIN
+  LOGOUT
+  AUX
+}
+
+// ─── Attendance: login / logout / AUX ────────────────────────────────────────
+//
+// The agent clock. Strictly append-only: there is no "current status" column
+// anywhere, because the current state is derived from the last event (see
+// src/lib/attendance.js). That is deliberate, not stylistic —
+//
+//   · Concurrency: a double-tap, a retried request after a timeout, or a second
+//     browser tab cannot corrupt a state they only append to. A read-modify-write
+//     on a status column loses one of them silently, and at shift change that is
+//     hundreds of agents punching in the same minute.
+//   · Disputes: "you were on break for 40 minutes" must be answerable with the
+//     actual sequence months later, not with a number nobody can re-derive.
+//   · Rule changes: when a break policy changes, history is replayed under the
+//     new rule instead of being wrong or needing a migration.
+//
+// `at` is an instant and is assigned by the server. A client clock is never
+// trusted: it can be wrong by hours, and it can be set deliberately. Local
+// calendar days are derived from the instant in the operating time zone —
+// Egypt observes DST again, so a fixed UTC offset would be an hour out twice a
+// year and would mis-bucket overnight shifts.
+model AttendanceEvent {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  at   DateTime
+  type PunchType
+  // Set for AUX events, and optionally on LOGIN to start in a state other than
+  // Available. Validated against AUX_CODES in the engine rather than as an enum,
+  // so an operation can add a code without a migration.
+  aux  String    @default("")
+
+  // agent | supervisor | system. A system logout closes an abandoned session and
+  // is not the agent's doing — adherence must not punish the two identically.
+  source String @default("agent")
+  note   String @default("")
+
+  // Who punched, when that is not the subject: a supervisor punching on an
+  // agent's behalf is a legitimate operation and must be attributable.
+  actorName String @default("")
+  actorRole String @default("")
+
+  createdAt DateTime @default(now())
+
+  // Deriving state means reading one employee's events in time order.
+  @@index([employeeId, at])
+  // Real-time floor view: everyone's recent activity.
+  @@index([at])
 }
 
 // The employee's timeline: one append-only row per thing that happened to them.
