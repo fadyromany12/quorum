@@ -22,7 +22,7 @@ import { P } from "../lib/tokens.js";
 import { fmtStamp, plural } from "../lib/format.js";
 import { todayStr } from "../lib/dates.js";
 import {
-  displayName, completedYears, nextStages, probationDue, isHeadcount,
+  displayName, completedYears, nextStages, probationDue, isHeadcount, canTransition,
 } from "../lib/employee.js";
 import { Avatar, StageChip } from "./People.jsx";
 
@@ -220,6 +220,7 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
   const entitlement = employee.entitlementDays ?? 0;
   const dueForConfirmation = probationDue(employee, today);
   const moves = nextStages(employee.stage).filter((s) => s !== "Exited");
+  const canExit = canTransition(employee.stage, "Exited");
 
   return (
     <div className="grid gap-3">
@@ -364,6 +365,13 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
         <SensitivePanel employeeId={employeeId} />
       </Card>
 
+      {/* Exits get a form, not a quick-action button: they need a type and a
+          last working day, and a record missing either is one somebody has to
+          reconstruct from memory later. */}
+      {canExit && (
+        <ExitPanel employee={employee} onDone={async () => { await load(); onChanged?.(); }} />
+      )}
+
       {/* ── Timeline ── */}
       <Card
         title={<span className="inline-flex items-center gap-2"><Clock size={14} />Timeline</span>}
@@ -423,5 +431,91 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
         </div>
       </Card>
     </div>
+  );
+}
+
+/* The exit form. Consequence stated up front, both required fields enforced by
+   the API as well — this form exists so the refusal is never the first thing
+   the user learns about the requirement. */
+function ExitPanel({ employee, onDone }) {
+  const [exitType, setExitType] = useState("Resignation");
+  const [lastDay, setLastDay] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/stage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: "Exited", exitType, effectiveDate: lastDay, exitReason: reason }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not record the exit.");
+      onDone();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title={<span className="inline-flex items-center gap-2"><UserMinus size={14} />Record an exit</span>}>
+      {error && <div className="mb-3" role="alert" style={{ fontSize: 13, color: P.brick }}>{error}</div>}
+      <div className="flex items-end gap-3 flex-wrap">
+        <label className="grid gap-1">
+          <span className="ao-disp uppercase tracking-wide" style={{ fontSize: 10, color: P.sub, letterSpacing: 0.6 }}>Type</span>
+          <select
+            value={exitType}
+            onChange={(e) => setExitType(e.target.value)}
+            style={{ fontSize: 12.5, padding: "7px 10px", borderRadius: 9, border: `1px solid ${P.line}`, background: P.card, color: P.ink }}
+          >
+            {["Resignation", "Termination", "EndOfContract", "Retirement", "Abandonment"].map((t) => (
+              <option key={t} value={t}>{t.replace(/([A-Z])/g, " $1").trim()}</option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1">
+          <span className="ao-disp uppercase tracking-wide" style={{ fontSize: 10, color: P.sub, letterSpacing: 0.6 }}>Last working day</span>
+          <input
+            type="date"
+            value={lastDay}
+            onChange={(e) => setLastDay(e.target.value)}
+            style={{ fontSize: 12.5, padding: "6px 9px", borderRadius: 9, border: `1px solid ${P.line}`, background: "var(--well)", color: P.ink }}
+          />
+        </label>
+        <label className="grid gap-1 flex-1" style={{ minWidth: 220 }}>
+          <span className="ao-disp uppercase tracking-wide" style={{ fontSize: 10, color: P.sub, letterSpacing: 0.6 }}>Reason</span>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="What has led to this — kept on the record"
+            style={{ fontSize: 12.5, padding: "6px 10px", borderRadius: 9, border: `1px solid ${P.line}`, background: "var(--well)", color: P.ink }}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy || !lastDay}
+          className="ao-disp uppercase tracking-wide font-semibold"
+          style={{
+            fontSize: 11.5, padding: "9px 16px", borderRadius: 10,
+            border: `1px solid ${P.brick}`, background: P.brickWash, color: P.brick,
+            cursor: busy || !lastDay ? "not-allowed" : "pointer",
+            opacity: busy || !lastDay ? 0.5 : 1,
+          }}
+        >
+          Record exit
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: P.amber, marginTop: 9 }}>
+        Exited is terminal — a returning employee gets a new record, because reusing
+        this one would corrupt service years, leave accrual and disciplinary chains.
+      </div>
+    </Card>
   );
 }

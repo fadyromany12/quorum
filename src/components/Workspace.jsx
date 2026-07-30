@@ -514,7 +514,7 @@ export default function Workspace({ initial, me, themeIntent }) {
 
             {/* The directory is independent of the case ledger — an org with no
                 violations logged still has people in it. */}
-            {tab === "people" && <People accounts={data.accounts} />}
+            {tab === "people" && <People accounts={data.accounts} me={me} />}
 
             {/* Live attendance, independent of the case ledger like the directory. */}
             {tab === "floor" && can(me, "floorView") && <FloorView accounts={data.accounts} />}

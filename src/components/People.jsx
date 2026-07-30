@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Users, Search, RefreshCw, ChevronLeft, ChevronRight, Building2,
+  Users, Search, RefreshCw, ChevronLeft, ChevronRight, Building2, UserPlus,
   CalendarDays, ShieldCheck, ArrowUpRight,
 } from "lucide-react";
 import { Card, Pill, Muted, BtnGhost } from "./ui/index.jsx";
@@ -19,6 +19,8 @@ import { plural } from "../lib/format.js";
 import { STAGES, displayName, completedYears } from "../lib/employee.js";
 import { todayStr } from "../lib/dates.js";
 import EmployeeProfile from "./EmployeeProfile.jsx";
+import AdmitPerson from "./AdmitPerson.jsx";
+import { can } from "../lib/auth.js";
 
 /* Stage colours carry meaning, so they map onto the palette's semantics rather
    than being picked for variety: green is fine, amber wants attention, brick is
@@ -143,7 +145,7 @@ function PersonCard({ employee, managerName, onOpen }) {
   );
 }
 
-export default function People({ accounts = [] }) {
+export default function People({ accounts = [], me = null }) {
   const [rows, setRows] = useState(null); // null = loading
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -153,6 +155,7 @@ export default function People({ accounts = [] }) {
   const [stage, setStage] = useState("All");
   const [includeExited, setIncludeExited] = useState(false);
   const [openId, setOpenId] = useState(null);
+  const [admitting, setAdmitting] = useState(false);
 
   /* Names for the "reports to" line. Manager ids come back on every row, but
      the manager themselves may be outside the current page — so the lookup is
@@ -213,6 +216,21 @@ export default function People({ accounts = [] }) {
     return c;
   }, [rows]);
 
+  if (admitting) {
+    return (
+      <AdmitPerson
+        accounts={accounts}
+        onCancel={() => setAdmitting(false)}
+        onDone={(created) => {
+          setAdmitting(false);
+          load();
+          // Straight into the new record, where the lifecycle buttons live.
+          setOpenId(created.id);
+        }}
+      />
+    );
+  }
+
   if (openId) {
     return (
       <EmployeeProfile
@@ -238,6 +256,11 @@ export default function People({ accounts = [] }) {
             <span className="ao-mono" style={{ fontSize: 11, color: P.sub }}>
               {plural(total, "person", "people")}
             </span>
+          )}
+          {can(me, "employeeWrite") && (
+            <BtnGhost onClick={() => setAdmitting(true)} icon={UserPlus}>
+              Admit someone
+            </BtnGhost>
           )}
           <BtnGhost onClick={load} icon={RefreshCw}>
             Refresh
