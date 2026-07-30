@@ -123,6 +123,18 @@ export const REQUEST_TYPES = {
     slaDays: 5,
     subjectIsRequester: true,
   },
+  /* The verified editability tier (see profile-policy.js): the employee
+     proposes, HR checks against a document, and only approval applies it.
+     These fields drive entitlements or payment destinations, so an immediate
+     self-edit here is an unattributed change to something that moves money. */
+  profileChange: {
+    label: "Profile change",
+    chain: "hrReview",
+    slaDays: 3,
+    subjectIsRequester: true,
+    withdrawableWhilePending: true,
+    consequence: "Applies only after HR verifies it against your documents.",
+  },
 };
 
 export const isRequestType = (t) => Object.hasOwn(REQUEST_TYPES, t);

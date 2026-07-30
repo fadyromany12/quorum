@@ -19,6 +19,7 @@ import {
 } from "./workflow.js";
 import { todayStr } from "./dates.js";
 import { recordGrant } from "./leave-db";
+import { verifiedChangeSet } from "./profile-policy.js";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -242,6 +243,26 @@ export async function decideRequest(
      happens here — and the unique requestId makes a retry a no-op, so a crash
      between the update above and this line self-heals on the next read. */
   if (settled) await recordGrant(final as never);
+
+  /* A verified profile change applies at approval and only then. The change
+     set is re-derived from the policy here rather than trusted from the
+     payload — the payload travelled through a browser, and only fields the
+     policy marks as verified survive. Applying is idempotent: writing the
+     same values twice is the same write. */
+  if (settled && final.type === "profileChange" && final.status === "approved") {
+    const payload = (final.payload ?? {}) as { fields?: Record<string, unknown> };
+    const cs = verifiedChangeSet(payload.fields ?? {});
+    if (Object.keys(cs.employee).length) {
+      await prisma.employee.update({ where: { id: final.subjectId }, data: cs.employee });
+    }
+    if (Object.keys(cs.pii).length) {
+      await prisma.employeePII.upsert({
+        where: { employeeId: final.subjectId },
+        create: { employeeId: final.subjectId, ...cs.pii },
+        update: cs.pii,
+      });
+    }
+  }
 
   return { ok: true as const, request: final, viaDelegation: mine.approverId !== actor.employeeId };
 }
