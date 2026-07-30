@@ -92,7 +92,13 @@ ok("re-login with new password works, mustChange cleared", fady.session?.user?.m
   const r = await req(fady.jar, "/workspace");
   ok("workspace renders for staff", r.status === 200);
   const html = await r.text();
-  ok("workspace carries server data (triage gate present)", html.includes("Triage gate") || html.includes("TRIAGE"));
+  ok("workspace renders the journey navigation", html.includes("Case review"));
+  /* The previous version of this checked for a nav label and called it "carries
+     server data", which a hard-coded menu entry proves nothing about. The
+     account names come from AppConfig, so they are only in the HTML if the
+     server actually read the database. */
+  ok("workspace carries server data (accounts read from the database)",
+    /Hertz/.test(html) && /Lenovo/.test(html), html.slice(0, 200));
 }
 
 /* ── 2. HR finalization sets the acknowledgement flag ───────────────────── */
