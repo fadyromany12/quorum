@@ -30,20 +30,17 @@
 /* ── AUX codes ──────────────────────────────────────────────────────────────
    `productive` counts toward occupancy. `paid` counts toward payroll hours.
    Lunch is the usual case where those two differ, and conflating them is how a
-   headline "hours worked" figure ends up overstating the paybill. */
-export const AUX_CODES = {
-  Available: { label: "Available", productive: true, paid: true },
-  BackOffice: { label: "Back office", productive: true, paid: true },
-  Break: { label: "Break", productive: false, paid: true, limitSeconds: 900, maxPerShift: 2 },
-  Lunch: { label: "Lunch", productive: false, paid: false, limitSeconds: 1800, maxPerShift: 1 },
-  Meeting: { label: "Meeting", productive: false, paid: true },
-  Training: { label: "Training", productive: false, paid: true },
-  Coaching: { label: "Coaching", productive: false, paid: true },
-  Idle: { label: "Idle", productive: false, paid: true },
-  Technical: { label: "Technical issue", productive: false, paid: true },
-};
+   headline "hours worked" figure ends up overstating the paybill.
 
-export const AUX_LIST = Object.keys(AUX_CODES);
+   The definitions live in taxonomy.js with every other reason the system
+   records, and are re-exported here under the name this module has always used.
+   One list: a second copy of "what an agent can be doing" is a second answer to
+   "were they adherent". */
+export { ACTIVITY_STATES as AUX_CODES } from "./taxonomy.js";
+import { ACTIVITY_STATES } from "./taxonomy.js";
+
+export const AUX_LIST = Object.keys(ACTIVITY_STATES);
+const AUX_CODES = ACTIVITY_STATES;
 export const isAux = (a) => Object.hasOwn(AUX_CODES, a);
 
 /** The state an agent lands in on login, and returns to when leaving an AUX. */

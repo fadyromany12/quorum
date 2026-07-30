@@ -283,8 +283,20 @@ console.log("\n── AUX code metadata ──");
 eq("every code declares productive and paid",
   A.AUX_LIST.every((k) => typeof A.AUX_CODES[k].productive === "boolean" && typeof A.AUX_CODES[k].paid === "boolean"),
   true);
-eq("lunch is the unpaid one", A.AUX_LIST.filter((k) => !A.AUX_CODES[k].paid), ["Lunch"]);
-eq("productive codes", A.AUX_LIST.filter((k) => A.AUX_CODES[k].productive), ["Available", "BackOffice"]);
+/* The unpaid states are the two the agent chose to step away for. Break and
+   prayer are paid; lunch and personal time are not. Getting this list wrong
+   overstates the paybill, which is why it is pinned rather than described. */
+eq("the unpaid states", A.AUX_LIST.filter((k) => !A.AUX_CODES[k].paid), ["Lunch", "Personal"]);
+eq("productive codes", A.AUX_LIST.filter((k) => A.AUX_CODES[k].productive),
+  ["Available", "InCall", "AfterCallWork", "BackOffice", "Outbound"]);
+/* Adherence measures whether the agent was where they were scheduled to be. An
+   agent sitting through a system outage was exactly there, so these states are
+   excluded rather than counted against them. */
+eq("states the agent did not cause are excused from adherence",
+  A.AUX_LIST.filter((k) => A.AUX_CODES[k].countsToAdherence === false),
+  ["Technical", "SystemOutage", "NoWorkAvailable"]);
+eq("prayer time is a first-class state, not borrowed from break",
+  A.isAux("Prayer") && A.AUX_CODES.Prayer.paid, true);
 eq("isAux rejects nonsense", A.isAux("Nap"), false);
 eq("the default state exists", A.isAux(A.DEFAULT_AUX), true);
 eq("a system logout is distinguishable from an agent one",

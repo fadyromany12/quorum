@@ -156,7 +156,8 @@ const EDGES = [
     department: "Operations", account: "Hertz", lob: "EMEA", grade: "A2",
     hireDate: ago(YEAR * 2 + 15), birthDate: "1995-11-08", gender: "Female",
     stage: "Exited", exitDate: ago(25), exitType: "Resignation",
-    exitReason: "Accepted an offer elsewhere. Assets returned, cleared by HR.",
+    // A taxonomy code, not prose — the same value the exit form now writes.
+    exitReason: "BetterOffer",
     manager: "ibrahim.kamel@konecta.com",
   },
   {

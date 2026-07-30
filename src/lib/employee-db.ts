@@ -21,6 +21,7 @@ import { todayStr } from "./dates.js";
 import { buildEmployeeQuery } from "./employees-query.js";
 import { GuardError } from "./api-guard";
 import { encryptPii, decryptPii } from "./pii-crypto.js";
+import { EXIT_REASONS } from "./taxonomy.js";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -340,7 +341,10 @@ export async function transitionStage(
   employeeId: string,
   to: string,
   actor: Actor,
-  opts: { effectiveDate?: string; detail?: string; exitType?: string; exitReason?: string } = {},
+  opts: {
+    effectiveDate?: string; detail?: string;
+    exitType?: string; exitReason?: string; exitNote?: string;
+  } = {},
 ) {
   const current = await prisma.employee.findUnique({
     where: { id: employeeId },
@@ -351,9 +355,16 @@ export async function transitionStage(
   const check = checkTransition(current, to);
   if (!check.ok) return { ok: false as const, status: 409, reason: check.reason };
 
+  /* The coded reason goes in the column, where it can be counted; the free-text
+     note goes on the timeline event, where it can be read. Keeping them apart is
+     what makes an attrition report possible without losing the specifics — a
+     single field has to be either countable or expressive and cannot be both. */
+  const exitLabel = opts.exitReason ? (EXIT_REASONS[opts.exitReason]?.label ?? opts.exitReason) : "";
+  const detail = [opts.detail, exitLabel, opts.exitNote].filter(Boolean).join(" — ");
+
   const event = stageChangeEvent(current, to, actor, {
     effectiveDate: opts.effectiveDate ?? "",
-    detail: opts.detail ?? "",
+    detail,
   });
 
   const patch: Prisma.EmployeeUpdateInput = { stage: to as Prisma.EmployeeUpdateInput["stage"] };

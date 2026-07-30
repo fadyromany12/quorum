@@ -28,6 +28,7 @@
 
 import { addDays, daysBetween, todayStr } from "./dates.js";
 import { approvalChain } from "./employee.js";
+import { LEAVE_CODES, exitReasonsFor } from "./taxonomy.js";
 
 /* ── Request types ──────────────────────────────────────────────────────────
    `consequence` is shown at the point of submission. An action with a side
@@ -738,10 +739,16 @@ export function canRaise(type, { actorId, actorRole, subjectId, subordinateIds =
    Enumerated values are checked here rather than at render time so the refusal
    reaches the person who can fix it, at the moment they can fix it. */
 
-/** Values an enumerated payload field may take, by request type and field. */
+/** Values an enumerated payload field may take, by request type and field.
+
+    Leave types and exit reasons come from the taxonomy rather than being
+    retyped here — a validator with its own copy of the list is a validator that
+    rejects the option the dropdown just offered. */
 export const PAYLOAD_ENUMS = {
   letterRequest: { kind: ["bank", "employment", "salary"] },
-  leave: { leaveType: ["Annual", "Sick", "Casual", "Unpaid"] },
+  leave: { leaveType: LEAVE_CODES },
+  resignation: { reason: exitReasonsFor("Resignation") },
+  termination: { reason: exitReasonsFor("Termination") },
 };
 
 /** Hard ceiling on a serialized payload. Generous for a form, useless as a store. */

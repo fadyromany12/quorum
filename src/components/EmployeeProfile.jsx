@@ -24,6 +24,10 @@ import { todayStr } from "../lib/dates.js";
 import {
   displayName, completedYears, nextStages, probationDue, isHeadcount, canTransition,
 } from "../lib/employee.js";
+import {
+  EXIT_TYPES, EXIT_TYPE_CODES, EXIT_REASONS, exitReasonsFor,
+  isVoluntaryExit, attritionClass,
+} from "../lib/taxonomy.js";
 import { Avatar, StageChip } from "./People.jsx";
 
 /* Each timeline type gets an icon and a colour so the record can be skimmed —
@@ -305,13 +309,32 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
           )}
           <Fact icon={Building2} label="Site" value={employee.workSite} />
           {employee.stage === "Probation" && <Fact icon={Clock} label="Confirmation due" value={employee.probationEnd} />}
-          {employee.exitDate && <Fact icon={UserMinus} label="Left" value={`${employee.exitDate} · ${employee.exitType || ""}`} />}
+          {employee.exitDate && (
+            <Fact
+              icon={UserMinus}
+              label="Left"
+              value={`${employee.exitDate} · ${EXIT_TYPES[employee.exitType]?.label ?? employee.exitType ?? ""}`}
+            />
+          )}
         </Facts>
 
+        {/* The stored value is a code; the label is what a person reads. Records
+            written before the codes existed hold free text, and fall through to
+            being shown as-is rather than disappearing. */}
         {employee.exitReason && (
-          <div className="mt-3" style={{ fontSize: 12.5, color: P.inkSoft }}>
-            <span style={{ color: P.sub }}>Exit reason: </span>
-            {employee.exitReason}
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1" style={{ fontSize: 12.5, color: P.inkSoft }}>
+            <span style={{ color: P.sub }}>Exit reason:</span>
+            <span>{EXIT_REASONS[employee.exitReason]?.label ?? employee.exitReason}</span>
+            {EXIT_REASONS[employee.exitReason] && (
+              <>
+                <Pill color={isVoluntaryExit(employee.exitReason) ? P.petrol : P.amber}>
+                  {attritionClass(employee.exitReason)}
+                </Pill>
+                <Pill color={EXIT_REASONS[employee.exitReason].rehireEligible ? P.green : P.brick}>
+                  {EXIT_REASONS[employee.exitReason].rehireEligible ? "rehire eligible" : "no rehire"}
+                </Pill>
+              </>
+            )}
           </div>
         )}
 
@@ -444,8 +467,16 @@ function ExitPanel({ employee, onDone }) {
   const [exitType, setExitType] = useState("Resignation");
   const [lastDay, setLastDay] = useState("");
   const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  /* The reasons that belong to the chosen type. Changing the type clears the
+     reason: "Resignation — Gross misconduct" is a record that contradicts
+     itself, and a dependent dropdown that keeps its old value produces exactly
+     that. */
+  const reasons = exitReasonsFor(exitType);
+  const meta = reason ? EXIT_REASONS[reason] : null;
 
   const submit = async () => {
     setBusy(true);
@@ -454,7 +485,10 @@ function ExitPanel({ employee, onDone }) {
       const res = await fetch(`/api/employees/${employee.id}/stage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: "Exited", exitType, effectiveDate: lastDay, exitReason: reason }),
+        body: JSON.stringify({
+          stage: "Exited", exitType, effectiveDate: lastDay,
+          exitReason: reason, exitNote: note,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Could not record the exit.");
@@ -474,11 +508,11 @@ function ExitPanel({ employee, onDone }) {
           <span className="ao-disp uppercase tracking-wide" style={{ fontSize: 10, color: P.sub, letterSpacing: 0.6 }}>Type</span>
           <select
             value={exitType}
-            onChange={(e) => setExitType(e.target.value)}
+            onChange={(e) => { setExitType(e.target.value); setReason(""); }}
             style={{ fontSize: 12.5, padding: "7px 10px", borderRadius: 9, border: `1px solid ${P.line}`, background: P.card, color: P.ink }}
           >
-            {["Resignation", "Termination", "EndOfContract", "Retirement", "Abandonment"].map((t) => (
-              <option key={t} value={t}>{t.replace(/([A-Z])/g, " $1").trim()}</option>
+            {EXIT_TYPE_CODES.map((t) => (
+              <option key={t} value={t}>{EXIT_TYPES[t].label}</option>
             ))}
           </select>
         </label>
@@ -491,30 +525,75 @@ function ExitPanel({ employee, onDone }) {
             style={{ fontSize: 12.5, padding: "6px 9px", borderRadius: 9, border: `1px solid ${P.line}`, background: "var(--well)", color: P.ink }}
           />
         </label>
-        <label className="grid gap-1 flex-1" style={{ minWidth: 220 }}>
+        {/* A coded reason, not a text box. Two people typing "better offer" and
+            "Better pay" produce an attrition report showing two causes with one
+            occurrence each, which is worse than no report because it looks like
+            one. The note underneath is where the specifics go. */}
+        <label className="grid gap-1" style={{ minWidth: 240 }}>
           <span className="ao-disp uppercase tracking-wide" style={{ fontSize: 10, color: P.sub, letterSpacing: 0.6 }}>Reason</span>
-          <input
+          <select
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="What has led to this — kept on the record"
+            style={{ fontSize: 12.5, padding: "7px 10px", borderRadius: 9, border: `1px solid ${P.line}`, background: P.card, color: P.ink }}
+          >
+            <option value="">Select a reason…</option>
+            {reasons.map((c) => (
+              <option key={c} value={c}>{EXIT_REASONS[c].label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 flex-1" style={{ minWidth: 200 }}>
+          <span className="ao-disp uppercase tracking-wide" style={{ fontSize: 10, color: P.sub, letterSpacing: 0.6 }}>Note</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Anything specific worth keeping on the record"
             style={{ fontSize: 12.5, padding: "6px 10px", borderRadius: 9, border: `1px solid ${P.line}`, background: "var(--well)", color: P.ink }}
           />
         </label>
         <button
           type="button"
           onClick={submit}
-          disabled={busy || !lastDay}
+          disabled={busy || !lastDay || !reason}
           className="ao-disp uppercase tracking-wide font-semibold"
           style={{
             fontSize: 11.5, padding: "9px 16px", borderRadius: 10,
             border: `1px solid ${P.brick}`, background: P.brickWash, color: P.brick,
-            cursor: busy || !lastDay ? "not-allowed" : "pointer",
-            opacity: busy || !lastDay ? 0.5 : 1,
+            cursor: busy || !lastDay || !reason ? "not-allowed" : "pointer",
+            opacity: busy || !lastDay || !reason ? 0.5 : 1,
           }}
         >
           Record exit
         </button>
       </div>
+      {/* What the chosen reason commits the record to. Rehire eligibility is the
+          field a hiring manager checks two years from now, and it is decided
+          here whether or not anyone says so — better said out loud. */}
+      {meta && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1" style={{ fontSize: 11.5, marginTop: 9, color: P.sub }}>
+          <span style={{ color: isVoluntaryExit(reason) ? P.petrol : P.amber, fontWeight: 550 }}>
+            {isVoluntaryExit(reason) ? "Voluntary" : "Employer-initiated"}
+          </span>
+          <span>·</span>
+          <span>Counts as {attritionClass(reason)} attrition</span>
+          <span>·</span>
+          <span style={{ color: meta.rehireEligible ? P.green : P.brick }}>
+            {meta.rehireEligible ? "Rehire eligible" : "Not rehire eligible"}
+          </span>
+          {meta.requiresEvidence && (
+            <>
+              <span>·</span>
+              <span style={{ color: P.amber }}>Attach the evidence to the record</span>
+            </>
+          )}
+          {EXIT_TYPES[exitType]?.statute && (
+            <>
+              <span>·</span>
+              <span style={{ opacity: 0.85 }}>{EXIT_TYPES[exitType].statute}</span>
+            </>
+          )}
+        </div>
+      )}
       <div style={{ fontSize: 11, color: P.amber, marginTop: 9 }}>
         Exited is terminal — a returning employee gets a new record, because reusing
         this one would corrupt service years, leave accrual and disciplinary chains.

@@ -22,8 +22,12 @@ import { Card, Pill, Muted, BtnGhost, BtnPrimary, TInput, TSelect, Label } from 
 import { P } from "../../lib/tokens.js";
 import { plural } from "../../lib/format.js";
 import { daysBetween, todayStr } from "../../lib/dates.js";
+import { LEAVE_TYPES, groupedOptions } from "../../lib/taxonomy.js";
 
-const LEAVE_TYPES = ["Annual", "Sick", "Casual", "Unpaid"];
+/* The leave types come from the taxonomy, not from a list retyped here. Every
+   entry carries whether it is paid, whether it eats the annual balance and what
+   document it needs — so the form can tell the employee before they submit,
+   instead of HR telling them a week later. */
 
 /* The letters HR issues on request. Each is generated from the employment
    record on download, never stored — so a reissued letter is the same letter,
@@ -79,6 +83,10 @@ export default function MyRequests({ entitlementDays = 0 }) {
      A one-day request is one day, not zero. */
   const span = from ? (daysBetween(from, to || from) + 1) : 0;
   const validSpan = Number.isFinite(span) && span > 0;
+
+  /* The rules for whatever is selected. Read from the taxonomy rather than
+     hard-coded here, so the form and the validator cannot disagree. */
+  const rules = LEAVE_TYPES[leaveType] ?? null;
 
   const leave = (rows || []).filter((r) => r.type === "leave");
   const awaiting = leave
@@ -186,7 +194,11 @@ export default function MyRequests({ entitlementDays = 0 }) {
           <div className="grid gap-1">
             <Label>Leave type</Label>
             <TSelect value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
-              {LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {groupedOptions(LEAVE_TYPES).map(({ group, options }) => (
+                <optgroup key={group} label={group}>
+                  {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </optgroup>
+              ))}
             </TSelect>
           </div>
           <div className="grid gap-1">
@@ -198,6 +210,43 @@ export default function MyRequests({ entitlementDays = 0 }) {
             <TInput type="date" value={to} min={from || todayStr()} onChange={(e) => setTo(e.target.value)} />
           </div>
         </div>
+
+        {/* What this type actually costs you, stated before you submit. An
+            employee who learns a week later that casual leave came out of their
+            annual balance has been surprised by their own record. */}
+        {rules && (
+          <div
+            className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"
+            style={{ fontSize: 11.5, color: P.sub }}
+          >
+            <span style={{ color: rules.paid ? P.green : P.amber, fontWeight: 550 }}>
+              {rules.paid ? "Paid" : "Unpaid"}
+            </span>
+            <span>·</span>
+            <span>{rules.deductsAnnual ? "Comes out of your annual balance" : "Does not touch your annual balance"}</span>
+            {rules.requiresEvidence && (
+              <>
+                <span>·</span>
+                <span style={{ color: P.amber }}>Needs {rules.evidenceLabel?.toLowerCase() ?? "a document"}</span>
+              </>
+            )}
+            {rules.maxDaysPerYear && (
+              <>
+                <span>·</span>
+                <span>Max {plural(rules.maxDaysPerYear, "day")} a year</span>
+              </>
+            )}
+            {rules.maxConsecutive && (
+              <>
+                <span>·</span>
+                <span>Max {plural(rules.maxConsecutive, "day")} in a row</span>
+              </>
+            )}
+          </div>
+        )}
+        {rules?.statute && (
+          <div style={{ fontSize: 10.5, color: P.sub, marginTop: 3, opacity: 0.85 }}>{rules.statute}</div>
+        )}
 
         <div className="grid gap-1 mt-3">
           <Label>Reason (optional)</Label>

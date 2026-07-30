@@ -1,4 +1,5 @@
 import { DEFAULT_DCM } from "./dcm.js";
+import { LEAVE_TYPES as TAXONOMY_LEAVE, LEAVE_CODES } from "./taxonomy.js";
 
 export const DEFAULT_ACCOUNTS = ["Hertz", "Lenovo", "Beko"];
 
@@ -12,7 +13,10 @@ export const DEFAULT_TLS = [
   "Kirolos Nagi",
 ];
 
-export const LEAVE_TYPES = ["Sick Leave", "Emergency Leave", "Annual Leave", "Work From Home", "Exam Leave", "Other"];
+/* The picker offers these as reasons an absence was authorised. Derived from the
+   taxonomy rather than being a second hand-typed list — the two had already
+   drifted, this one saying "Emergency Leave" while the portal said "Casual". */
+export const LEAVE_TYPES = LEAVE_CODES.map((c) => TAXONOMY_LEAVE[c].label);
 
 /** Lines of business the RTA reports break down by. */
 export const LOBS = ["EMEA", "GTAP", "North America"];
