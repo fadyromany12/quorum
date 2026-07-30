@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { inbox, myRequests, raiseRequest, canRaise } from "@/lib/workflow-db";
 import { writeAudit } from "@/lib/db";
 import { subordinateIds } from "@/lib/employee.js";
-import { REQUEST_TYPES } from "@/lib/workflow.js";
+import { REQUEST_TYPES, checkPayload } from "@/lib/workflow.js";
 
 /** The actor's employment record — every request question is asked about it. */
 async function me(userId?: string) {
@@ -45,6 +45,11 @@ export const POST = guarded(async (req: Request) => {
   const type = String(body.type ?? "");
   const cfg = REQUEST_TYPES[type as keyof typeof REQUEST_TYPES];
   if (!cfg) throw new GuardError(400, `Unknown request type "${type}".`);
+
+  /* Validate the free-form part before anything is persisted: an unchecked
+     value here becomes an unchecked value in a PDF later. */
+  const payloadCheck = checkPayload(type, body.payload ?? {});
+  if (!payloadCheck.ok) throw new GuardError(400, payloadCheck.reason);
 
   const subjectId = body.subjectId ? String(body.subjectId) : employee.id;
 

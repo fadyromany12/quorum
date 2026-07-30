@@ -723,3 +723,66 @@ export function canRaise(type, { actorId, actorRole, subjectId, subordinateIds =
   if (subordinateIds.includes(subjectId)) return { ok: true };
   return { ok: false, reason: "You can only raise this for someone who reports to you." };
 }
+
+/* ── Payload validation ─────────────────────────────────────────────────────
+   The payload is the only part of a request that is free-form, and it travelled
+   through a browser. Two things go wrong when it is stored unchecked:
+
+     A value nobody validated becomes a document nobody validated. An HR letter
+     asked for with kind "salary " or "Salary" or "bonus" used to render a
+     titleless, salary-less certificate rather than failing — a wrong document
+     that looks official is worse than an error message.
+
+     And a JSON column with no ceiling is a place to put a megabyte.
+
+   Enumerated values are checked here rather than at render time so the refusal
+   reaches the person who can fix it, at the moment they can fix it. */
+
+/** Values an enumerated payload field may take, by request type and field. */
+export const PAYLOAD_ENUMS = {
+  letterRequest: { kind: ["bank", "employment", "salary"] },
+  leave: { leaveType: ["Annual", "Sick", "Casual", "Unpaid"] },
+};
+
+/** Hard ceiling on a serialized payload. Generous for a form, useless as a store. */
+export const MAX_PAYLOAD_BYTES = 8 * 1024;
+
+/**
+ * Check a request payload before it is persisted.
+ *
+ * @param {string} type
+ * @param {Record<string, unknown>} payload
+ * @returns {{ok: true} | {ok: false, reason: string}}
+ */
+export function checkPayload(type, payload) {
+  const p = payload ?? {};
+  if (typeof p !== "object" || Array.isArray(p)) {
+    return { ok: false, reason: "The request details must be an object." };
+  }
+
+  let size;
+  try {
+    size = JSON.stringify(p).length;
+  } catch {
+    // Circular or non-serializable — it would fail at the database anyway.
+    return { ok: false, reason: "The request details could not be read." };
+  }
+  if (size > MAX_PAYLOAD_BYTES) {
+    return { ok: false, reason: "The request details are too large." };
+  }
+
+  const enums = PAYLOAD_ENUMS[type];
+  if (enums) {
+    for (const [field, allowed] of Object.entries(enums)) {
+      if (p[field] === undefined) continue; // absence is the type's own business
+      if (!allowed.includes(p[field])) {
+        return { ok: false, reason: `"${field}" must be one of: ${allowed.join(", ")}.` };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+/** Whether a value is a usable choice for an enumerated payload field. */
+export const isPayloadChoice = (type, field, value) =>
+  (PAYLOAD_ENUMS[type]?.[field] ?? []).includes(value);

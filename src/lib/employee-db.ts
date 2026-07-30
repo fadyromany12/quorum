@@ -15,10 +15,11 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import {
   nextEmpId, checkTransition, stageChangeEvent, probationEnd, subordinateIds, annualEntitlement,
-  FLEET_WIDE_ROLES,
+  FLEET_WIDE_ROLES, canViewEmployee,
 } from "./employee.js";
 import { todayStr } from "./dates.js";
 import { buildEmployeeQuery } from "./employees-query.js";
+import { GuardError } from "./api-guard";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -126,6 +127,33 @@ export async function visibilityScope(actor: Actor & { id?: string }): Promise<s
   if (!me) return [];
   const graph = await loadOrgGraph();
   return [me.id, ...subordinateIds(me.id, graph)];
+}
+
+/**
+ * Throw unless this actor may see this record.
+ *
+ * Lives here, next to visibilityScope, because the two must never disagree: a
+ * record the directory filters out must not be reachable by id from any other
+ * endpoint. Every route that takes an employee id calls this — authorization
+ * re-derived per endpoint drifts, and the endpoint that drifts is the one
+ * nobody audited.
+ *
+ * 404 rather than 403 on failure: confirming a record exists is itself a
+ * disclosure, and "no such employee" is what an out-of-scope id should look
+ * like from outside.
+ */
+export async function assertVisibleEmployee(
+  actor: Actor & { id?: string },
+  targetId: string,
+): Promise<void> {
+  if (FLEET_WIDE_ROLES.includes(actor.role)) return;
+  const me = actor.id
+    ? await prisma.employee.findUnique({ where: { userId: actor.id }, select: { id: true } })
+    : null;
+  const graph = await loadOrgGraph();
+  if (!canViewEmployee(actor.role, me?.id ?? null, targetId, graph)) {
+    throw new GuardError(404, "No such employee.");
+  }
 }
 
 export async function getEmployee(id: string) {

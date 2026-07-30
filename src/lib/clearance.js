@@ -14,6 +14,18 @@ export const DEFAULT_CLEARANCE = [
   { key: "hr-final", label: "HR final sign-off", owner: "HR", dependsOn: "*" },
 ];
 
+/* The canonical sequence, by key. A checklist whose whole point is an order
+   must not be displayed in whatever order the database hands back — sorting by
+   key gives "facilities, finance, handover, hr-final, it-assets", which reads
+   as five unrelated tasks and puts the seal third. Unknown keys sort last
+   rather than first, so a step added to the table but not to DEFAULT_CLEARANCE
+   appears at the end instead of silently displacing the sequence. */
+const ORDER = new Map(DEFAULT_CLEARANCE.map((s, i) => [s.key, i]));
+const orderOf = (key) => ORDER.get(key) ?? Number.MAX_SAFE_INTEGER;
+
+/** Comparator for `steps.sort()` — the sequence the checklist is meant to run in. */
+export const byStepOrder = (a, b) => orderOf(a.key) - orderOf(b.key) || a.key.localeCompare(b.key);
+
 const done = (steps, key) => steps.some((s) => s.key === key && s.state === "done");
 
 /**

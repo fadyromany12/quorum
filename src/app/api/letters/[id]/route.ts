@@ -42,7 +42,14 @@ export const GET = guarded(async (req: Request) => {
   }
 
   const e = row.subject;
+  /* Defence in depth: raising the request validates the kind, but rows predating
+     that check exist, and a letter is a document someone takes to a bank. An
+     unrecognised kind is refused rather than rendered as a generic letter —
+     failing loudly beats issuing something official-looking and wrong. */
   const kind = String((row.payload as { kind?: string })?.kind ?? "employment");
+  if (!Object.hasOwn(KINDS, kind)) {
+    throw new GuardError(409, `"${kind}" is not a letter this system issues — ask HR to reissue the request.`);
+  }
   const latestPay = kind === "salary"
     ? await prisma.compensationRecord.findFirst({
         where: { employeeId: e.id, voided: false },
@@ -62,7 +69,7 @@ export const GET = guarded(async (req: Request) => {
 
   line("Konecta GDC — Human Resources", { b: true, size: 14, gap: 26 });
   line(`Date: ${todayStr()}`, { gap: 26 });
-  line(KINDS[kind] ?? "HR letter", { b: true, size: 12, gap: 24 });
+  line(KINDS[kind], { b: true, size: 12, gap: 24 });
   line("To whom it may concern,", { gap: 22 });
   line(`This is to certify that ${e.fullNameEn} (ID ${e.empId}) is employed by`);
   line(`Konecta GDC as ${e.jobTitle || "an employee"}${e.account ? ` on the ${e.account} account` : ""},`);

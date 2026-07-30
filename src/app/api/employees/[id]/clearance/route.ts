@@ -9,7 +9,8 @@ import { NextResponse } from "next/server";
 import { requireRole, guarded, GuardError } from "@/lib/api-guard";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/db";
-import { DEFAULT_CLEARANCE, canComplete, allDone } from "@/lib/clearance.js";
+import { assertVisibleEmployee } from "@/lib/employee-db";
+import { DEFAULT_CLEARANCE, canComplete, allDone, byStepOrder } from "@/lib/clearance.js";
 
 const idFrom = (req: Request) => {
   const p = new URL(req.url).pathname.split("/").filter(Boolean);
@@ -35,12 +36,16 @@ async function ensureSteps(employeeId: string) {
     where: { employeeId },
     orderBy: { key: "asc" },
   });
-  return { emp, steps };
+  return { emp, steps: steps.sort(byStepOrder) };
 }
 
 export const GET = guarded(async (req: Request) => {
-  await requireRole("employeeRead");
-  const r = await ensureSteps(idFrom(req));
+  const actor = await requireRole("employeeRead");
+  const id = idFrom(req);
+  // employeeRead includes leads, who are scoped to their own subtree. Without
+  // this, clearance was reachable by id for anyone the directory hides.
+  await assertVisibleEmployee(actor, id);
+  const r = await ensureSteps(id);
   if (!r) throw new GuardError(404, "No such employee.");
   return NextResponse.json({ steps: r.steps, complete: allDone(r.steps) });
 });
@@ -50,6 +55,7 @@ export const POST = guarded(async (req: Request) => {
   // own steps. Attribution is what keeps that honest.
   const actor = await requireRole("employeeRead");
   const id = idFrom(req);
+  await assertVisibleEmployee(actor, id);
   const body = await req.json().catch(() => ({}));
   const key = String(body.key ?? "");
 
@@ -65,7 +71,7 @@ export const POST = guarded(async (req: Request) => {
     data: { state: "done", doneByName: actor.name, doneAt: new Date(), note: String(body.note ?? "") },
   });
 
-  const steps = await prisma.clearanceStep.findMany({ where: { employeeId: id }, orderBy: { key: "asc" } });
+  const steps = (await prisma.clearanceStep.findMany({ where: { employeeId: id } })).sort(byStepOrder);
   const complete = allDone(steps);
 
   await writeAudit({

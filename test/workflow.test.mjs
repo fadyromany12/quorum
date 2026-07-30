@@ -381,5 +381,54 @@ eq("every co-approval type declares what is agreed and a default",
   Object.values(W.REQUEST_TYPES).filter((c) => c.chain === "coApproval")
     .every((c) => !!c.agreeOn && c.defaultAfterDays > 0), true);
 
+console.log("\n── Payload validation ──");
+/* The payload is the only free-form part of a request and it came from a
+   browser. An unchecked value here becomes an unchecked value in a PDF. */
+eq("a valid letter kind passes", W.checkPayload("letterRequest", { kind: "salary" }), { ok: true });
+eq("every advertised kind is accepted",
+  ["bank", "employment", "salary"].every((k) => W.checkPayload("letterRequest", { kind: k }).ok), true);
+eq("an unknown kind is refused",
+  W.checkPayload("letterRequest", { kind: "bonus" }),
+  { ok: false, reason: '"kind" must be one of: bank, employment, salary.' });
+eq("case matters — a near-miss is still a miss",
+  W.checkPayload("letterRequest", { kind: "Salary" }).ok, false);
+eq("so does stray whitespace", W.checkPayload("letterRequest", { kind: "salary " }).ok, false);
+eq("a non-string is refused", W.checkPayload("letterRequest", { kind: 3 }).ok, false);
+eq("an absent field is the type's own business, not a payload error",
+  W.checkPayload("letterRequest", {}), { ok: true });
+eq("unrelated keys are not policed here",
+  W.checkPayload("letterRequest", { kind: "bank", note: "for my mortgage" }), { ok: true });
+
+eq("leave types are enumerated too",
+  W.checkPayload("leave", { leaveType: "Annual" }), { ok: true });
+eq("an invented leave type is refused", W.checkPayload("leave", { leaveType: "Sabbatical" }).ok, false);
+
+eq("a type with no enum accepts anything shaped like an object",
+  W.checkPayload("transfer", { toDepartment: "Collections" }), { ok: true });
+eq("an empty payload is fine", W.checkPayload("leave", {}), { ok: true });
+eq("null is treated as empty", W.checkPayload("leave", null), { ok: true });
+eq("undefined is treated as empty", W.checkPayload("leave", undefined), { ok: true });
+eq("an unknown request type still gets the size and shape check",
+  W.checkPayload("nonsense", { a: 1 }), { ok: true });
+
+eq("an array is not a payload", W.checkPayload("leave", ["a"]).ok, false);
+{
+  const huge = { note: "x".repeat(W.MAX_PAYLOAD_BYTES + 1) };
+  eq("an oversized payload is refused", W.checkPayload("leave", huge),
+    { ok: false, reason: "The request details are too large." });
+  const fine = { note: "x".repeat(100) };
+  eq("an ordinary form payload is nowhere near the ceiling", W.checkPayload("leave", fine), { ok: true });
+}
+{
+  const circular = { a: 1 };
+  circular.self = circular;
+  eq("a circular payload is refused, not thrown",
+    W.checkPayload("leave", circular), { ok: false, reason: "The request details could not be read." });
+}
+eq("isPayloadChoice agrees with checkPayload",
+  W.isPayloadChoice("letterRequest", "kind", "bank"), true);
+eq("and rejects the same values", W.isPayloadChoice("letterRequest", "kind", "bonus"), false);
+eq("an unknown field has no choices", W.isPayloadChoice("letterRequest", "colour", "red"), false);
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

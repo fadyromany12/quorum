@@ -6,23 +6,8 @@
 
 import { NextResponse } from "next/server";
 import { requireRole, guarded, GuardError } from "@/lib/api-guard";
-import { getEmployee, getTimeline, updateEmployee, loadOrgGraph } from "@/lib/employee-db";
-import { prisma } from "@/lib/prisma";
+import { getEmployee, getTimeline, updateEmployee, assertVisibleEmployee as assertVisible } from "@/lib/employee-db";
 import { writeAudit } from "@/lib/db";
-import { canViewEmployee } from "@/lib/employee.js";
-
-/** Throws unless the actor may see this record. */
-async function assertVisible(actor: { id?: string; role: string }, targetId: string) {
-  if (actor.role === "SuperAdmin" || actor.role === "HRBusinessPartner") return;
-  const me = actor.id
-    ? await prisma.employee.findUnique({ where: { userId: actor.id }, select: { id: true } })
-    : null;
-  const graph = await loadOrgGraph();
-  if (!canViewEmployee(actor.role, me?.id ?? null, targetId, graph)) {
-    // 404 rather than 403: confirming a record exists is itself a disclosure.
-    throw new GuardError(404, "No such employee.");
-  }
-}
 
 export const GET = guarded(async (req: Request) => {
   const actor = await requireRole("employeeRead");
