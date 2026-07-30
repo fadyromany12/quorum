@@ -110,6 +110,15 @@ export async function seedAll(prisma, { actorName = "system", actorRole = "Super
      Employee.userId points at with SetNull). */
   await prisma.$transaction([
     prisma.auditLog.deleteMany(),
+    // Delegation carries plain ids, not relations, so nothing cascades it —
+    // without this line a reseed leaves orphaned delegations that silently
+    // route new approvals to employees who no longer exist.
+    prisma.delegation.deleteMany(),
+    prisma.requestStep.deleteMany(),
+    prisma.request.deleteMany(),
+    prisma.leaveLedgerEntry.deleteMany(),
+    prisma.attendanceEvent.deleteMany(),
+    prisma.compensationRecord.deleteMany(),
     prisma.employeeEvent.deleteMany(),
     prisma.employeePII.deleteMany(),
     prisma.dependent.deleteMany(),

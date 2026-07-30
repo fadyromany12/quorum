@@ -3,11 +3,11 @@
 /* My requests — ask for leave, and see what happened to everything I've asked
    for.
 
-   The balance shown here is entitlement minus days actually granted, computed
-   from the requests themselves. It is deliberately *not* presented as a full
-   accrual ledger, because the monthly-accrual side is not built yet and a number
-   labelled "days left" that quietly ignores accrual is worse than no number:
-   people plan around it.
+   The balance is the leave ledger's sum: monthly accruals credited since hire,
+   minus days granted, plus any HR adjustments. The derivation rides along with
+   the number, because a balance that cannot show its work is just an assertion
+   — and the ledger is brought up to date on read, so it never depends on
+   whether a cron has run.
 
    Partial outcomes are surfaced prominently. "You asked for five and got three"
    is the single most confusing thing an approval system can leave implicit, and
@@ -35,6 +35,7 @@ const STATUS_META = {
 
 export default function MyRequests({ entitlementDays = 0 }) {
   const [rows, setRows] = useState(null);
+  const [led, setLed] = useState(null); // the ledger: balance + derivation
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,10 +48,15 @@ export default function MyRequests({ entitlementDays = 0 }) {
   const load = useCallback(async () => {
     setError("");
     try {
-      const res = await fetch("/api/requests?view=mine");
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || "Could not load your requests.");
-      setRows(json.requests);
+      const [reqRes, ledRes] = await Promise.all([
+        fetch("/api/requests?view=mine"),
+        fetch("/api/leave/balance"),
+      ]);
+      const reqJson = await reqRes.json().catch(() => ({}));
+      const ledJson = await ledRes.json().catch(() => ({}));
+      if (!reqRes.ok) throw new Error(reqJson.error || "Could not load your requests.");
+      setRows(reqJson.requests);
+      setLed(ledRes.ok ? ledJson : null);
     } catch (err) {
       setError(err.message);
       setRows([]);
@@ -65,13 +71,14 @@ export default function MyRequests({ entitlementDays = 0 }) {
   const validSpan = Number.isFinite(span) && span > 0;
 
   const leave = (rows || []).filter((r) => r.type === "leave");
-  const granted = leave
-    .filter((r) => ["approved", "partial"].includes(r.status))
-    .reduce((s, r) => s + Number(r.grantedUnits ?? 0), 0);
   const awaiting = leave
     .filter((r) => r.status === "pending")
     .reduce((s, r) => s + Number(r.requestedUnits ?? 0), 0);
-  const remaining = Math.max(0, entitlementDays - granted);
+  // The ledger is the truth; the request list is only used for what is still
+  // pending, which by definition has not touched the ledger yet.
+  const accrued = led?.byType?.accrual ?? 0;
+  const taken = -(led?.byType?.grant ?? 0);
+  const remaining = led ? led.balance : 0;
 
   const submit = async () => {
     if (!validSpan) return;
@@ -114,9 +121,10 @@ export default function MyRequests({ entitlementDays = 0 }) {
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}>
           {[
             ["Remaining", remaining, P.green],
-            ["Granted", granted, P.ink],
+            ["Accrued", accrued, P.ink],
+            ["Taken", taken, P.inkSoft],
             ["Awaiting", awaiting, P.amber],
-            ["Entitlement", entitlementDays, P.petrol],
+            ["Per year", entitlementDays, P.petrol],
           ].map(([label, value, color]) => (
             <div key={label}>
               <div className="ao-disp uppercase tracking-wide" style={{ fontSize: 10, color: P.sub, letterSpacing: 0.6 }}>
@@ -130,9 +138,11 @@ export default function MyRequests({ entitlementDays = 0 }) {
           ))}
         </div>
         <div style={{ fontSize: 11, color: P.sub, marginTop: 10, borderTop: `1px solid ${P.line}`, paddingTop: 9 }}>
-          Entitlement follows Labour Law No. 12/2003 Art. 47 — 15 days once you pass six
-          months, 21 after a full year, 30 after ten years or at age 50. Remaining is your
-          entitlement less days actually granted; monthly accrual is not reflected yet.
+          Your balance is a ledger: one twelfth of your yearly entitlement is credited at
+          the end of each month, and approved days are deducted when they are granted.
+          The yearly rate follows Labour Law No. 12/2003 Art. 47 — 15 days once you pass
+          six months, 21 after a full year, 30 after ten years or at age 50.
+          {led?.entries?.length > 0 && ` ${led.entries.length} entries stand behind this number.`}
         </div>
       </Card>
 

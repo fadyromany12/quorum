@@ -274,6 +274,7 @@ model Employee {
   compensation CompensationRecord[]
   attendance   AttendanceEvent[]
   requests     Request[]            @relation("RequestSubject")
+  leaveLedger  LeaveLedgerEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -566,6 +567,41 @@ model AttendanceEvent {
   @@index([employeeId, at])
   // Real-time floor view: everyone's recent activity.
   @@index([at])
+}
+
+
+// ─── The leave ledger ────────────────────────────────────────────────────────
+//
+// A balance is never a column; it is the sum of this table. Accruals credit,
+// grants debit, and the rows are the explanation an employee is shown when they
+// ask why the number is what it is. Append-only: an entry entered in error is
+// countered by a reversal, and both stay readable.
+//
+// Idempotency is structural, not procedural. An accrual is unique per
+// (employee, type, monthKey), so the monthly job can run twice — or catch up
+// after months of not running — and converge on the same ledger. A grant is
+// unique per requestId, so a retried settlement cannot debit twice. monthKey
+// is nullable rather than defaulted: Postgres treats NULLs as distinct, which
+// is exactly what lets non-accrual rows coexist under the same constraint.
+model LeaveLedgerEntry {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  at            DateTime @default(now())
+  effectiveDate String   @default("") // the day it applies, not the day it was written
+
+  type String // accrual | grant | adjustment | expiry | reversal
+  days Decimal @db.Decimal(6, 2) // signed: accruals +, grants −
+
+  monthKey  String? // YYYY-MM, accruals only
+  requestId String? @unique // grants only: one debit per settled request
+
+  note      String @default("")
+  actorName String @default("")
+
+  @@unique([employeeId, type, monthKey])
+  @@index([employeeId, at])
 }
 
 // The employee's timeline: one append-only row per thing that happened to them.

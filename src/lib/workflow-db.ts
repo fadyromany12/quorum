@@ -18,6 +18,7 @@ import {
   grantedUnitsOf, inboxFor, slaFor, escalations, canRaise, REQUEST_TYPES,
 } from "./workflow.js";
 import { todayStr } from "./dates.js";
+import { recordGrant } from "./leave-db";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -235,7 +236,14 @@ export async function decideRequest(
   });
 
   const fresh = await prisma.request.findUnique({ where: { id: requestId }, select: REQUEST_SELECT });
-  return { ok: true as const, request: decorate(toRequest(fresh as Row)), viaDelegation: mine.approverId !== actor.employeeId };
+  const final = decorate(toRequest(fresh as Row));
+
+  /* Settlement is the moment leave is actually spent, so the ledger debit
+     happens here — and the unique requestId makes a retry a no-op, so a crash
+     between the update above and this line self-heals on the next read. */
+  if (settled) await recordGrant(final as never);
+
+  return { ok: true as const, request: final, viaDelegation: mine.approverId !== actor.employeeId };
 }
 
 /* ── Withdrawing ────────────────────────────────────────────────────────────*/
