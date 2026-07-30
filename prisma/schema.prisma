@@ -32,6 +32,35 @@ enum CaseStage {
   dismissed
 }
 
+// Where an employee sits in their lifecycle. Deliberately one dimension: an
+// employee is in exactly one stage at a time, and every transition is an
+// EmployeeEvent. "Applicant" exists so an intake form can be captured before
+// anyone approves it — the record is real, the person just isn't staff yet.
+enum EmploymentStage {
+  Applicant
+  Onboarding
+  Probation
+  Active
+  OnPip
+  Suspended
+  Notice
+  Exited
+}
+
+enum ExitType {
+  Resignation
+  Termination
+  EndOfContract
+  Retirement
+  Abandonment
+}
+
+enum ManagerKind {
+  Direct
+  Functional
+  Dotted
+}
+
 model User {
   id         String   @id @default(cuid())
   name       String
@@ -47,6 +76,10 @@ model User {
   updatedAt  DateTime @updatedAt
 
   auditLogs AuditLog[]
+  // The employment record behind this login, once one exists. Optional in both
+  // directions: applicants have no login, and service accounts have no
+  // employment record.
+  employee  Employee?
 }
 
 model Case {
@@ -145,6 +178,179 @@ model Case {
   @@index([requiresAcknowledgement, agentAcknowledgedAt])
   // Supports the paginated read API's account-scoped, date-ordered windows.
   @@index([account, date])
+}
+
+// ─── Employee master record ──────────────────────────────────────────────────
+//
+// The spine of the system: one row per person, from intake to exit. Everything
+// else (cases, leave, coaching, pay) hangs off this and is reconstructable as a
+// timeline via EmployeeEvent.
+//
+// Identity is split deliberately. Employee holds what a team lead legitimately
+// needs to do their job. EmployeePII holds government identifiers and bank
+// details in a separate table so reads can be permission-gated and audited
+// independently — a lead can see who reports to them without ever being able
+// to pull an IBAN.
+model Employee {
+  id    String @id @default(cuid())
+  // Human-facing payroll identifier, "KOM-1001". Unique and never reused.
+  empId String @unique
+
+  // Bilingual by requirement, not decoration: Egyptian payroll, social
+  // insurance and bank files are filed in Arabic, everything operational is in
+  // English. Both are authoritative for different systems.
+  fullNameEn    String
+  fullNameAr    String @default("")
+  preferredName String @default("")
+
+  workEmail     String  @unique
+  personalEmail String  @default("")
+  phone         String  @default("")
+  gender        String  @default("") // Male | Female | Undisclosed
+  birthDate     String  @default("") // YYYY-MM-DD, calendar day (see Case.date)
+  addressAr     String  @default("")
+  linkedInUrl   String  @default("")
+
+  // Placement. account/lob mirror Case so violation history joins cleanly.
+  jobTitle   String @default("")
+  department String @default("")
+  account    String @default("")
+  lob        String @default("")
+  grade      String @default("")
+  workSite   String @default("")
+
+  // Reporting lines. Three separate links because BPO org charts genuinely
+  // need them: the Direct manager owns the person, the Functional manager owns
+  // the client account, and Dotted is advisory. Leave approval routes through
+  // Functional first when it differs from Direct — ported from KOMPASS.
+  directManagerId     String?
+  directManager       Employee?  @relation("DirectReports", fields: [directManagerId], references: [id], onDelete: SetNull)
+  directReports       Employee[] @relation("DirectReports")
+  functionalManagerId String?
+  functionalManager   Employee?  @relation("FunctionalReports", fields: [functionalManagerId], references: [id], onDelete: SetNull)
+  functionalReports   Employee[] @relation("FunctionalReports")
+  dottedManagerId     String?
+  dottedManager       Employee?  @relation("DottedReports", fields: [dottedManagerId], references: [id], onDelete: SetNull)
+  dottedReports       Employee[] @relation("DottedReports")
+
+  // Lifecycle. hireDate drives leave accrual tiers and probation; both are
+  // calendar days, for the same timezone reasons as Case.date.
+  stage       EmploymentStage @default(Applicant)
+  hireDate    String          @default("")
+  probationEnd String         @default("")
+  exitDate    String          @default("")
+  exitType    ExitType?
+  exitReason  String          @default("")
+
+  // Equipment issued at onboarding, e.g. ["Laptop","MiFi","Voice Line"].
+  // Recorded here so offboarding can assert every item came back.
+  assets Json @default("[]")
+
+  // Optional login. Not every employee has one (an applicant never does), and
+  // deleting a login must not delete the employment record — hence SetNull.
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  pii        EmployeePII?
+  dependents Dependent[]
+  events     EmployeeEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stage])
+  @@index([account, stage])
+  @@index([directManagerId])
+  @@index([fullNameEn])
+}
+
+// Government identifiers, banking and next-of-kin. Split from Employee so the
+// API can gate it behind one explicit permission and audit every read.
+//
+// NOTE: stored as plaintext at this step. Field-level encryption lands as its
+// own change so the key requirement is explicit and independently testable —
+// see docs. Do not treat this table as safe to expose.
+model EmployeePII {
+  employeeId String   @id
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  nationalId        String @default("") // Egyptian NID, 14 digits
+  passportNumber    String @default("")
+  socialInsuranceNo String @default("")
+
+  bankName      String @default("")
+  swiftCode     String @default("")
+  accountNumber String @default("")
+  iban          String @default("")
+
+  maritalStatus String @default("")
+  marriageDate  String @default("")
+
+  emergencyName     String @default("")
+  emergencyPhone    String @default("")
+  emergencyRelation String @default("")
+
+  // Pointers to documents held in Drive/storage — the app stores the location,
+  // never the file, same convention as Case.evidenceUrl.
+  photoUrl          String @default("")
+  nationalIdScanUrl String @default("")
+  offerLetterUrl    String @default("")
+  marriageCertUrl   String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Family members, for medical enrolment. A real table rather than the JSON
+// blob KOMPASS used — that blob is exactly what the off-by-one column read
+// silently destroyed, and it can't be queried for insurance headcount.
+model Dependent {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  name           String
+  relation       String @default("") // Spouse | Son | Daughter | Parent
+  birthDate      String @default("")
+  nationalId     String @default("")
+  medicalCovered Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+}
+
+// The employee's timeline: one append-only row per thing that happened to them.
+// Distinct from AuditLog on purpose — AuditLog answers "who touched the
+// system", this answers "what happened to this person". A promotion belongs in
+// an HR record forever; a failed login does not.
+model EmployeeEvent {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  at DateTime @default(now())
+  // The calendar day the change takes effect, which is not always the day it
+  // was entered — backdated hires and future-dated promotions are routine.
+  effectiveDate String @default("")
+
+  // HIRED | STAGE_CHANGED | PROMOTED | PAY_CHANGED | TRANSFERRED | MANAGER_CHANGED
+  // | LEAVE_APPROVED | VIOLATION_LOGGED | COACHING_LOGGED | PIP_OPENED
+  // | PIP_CLOSED | ASSET_ISSUED | ASSET_RETURNED | EXITED | NOTE
+  type    String
+  title   String
+  detail  String @default("")
+  fromVal String @default("")
+  toVal   String @default("")
+
+  actorName String @default("")
+  actorRole String @default("")
+  caseId    String?
+  meta      Json    @default("{}")
+
+  @@index([employeeId, at])
+  @@index([type])
 }
 
 // The editable Disciplinary Consequences Matrix. Seeded with the 35-violation
