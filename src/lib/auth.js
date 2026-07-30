@@ -36,11 +36,11 @@ export function passwordProblem(pw) {
 /* What each staff role may see. Agents never reach the workspace at all —
    they live in /agent-portal, enforced by the route-group layouts. */
 export const TABS_FOR = {
-  SuperAdmin: ["dashboard", "log", "rta", "triage", "approvals", "agents", "audit", "dcm", "users", "settings"],
+  SuperAdmin: ["dashboard", "people", "log", "rta", "triage", "approvals", "agents", "audit", "dcm", "users", "settings"],
   WFM: ["rta"],
-  ProjectManager: ["dashboard", "log", "triage", "agents"],
-  OperationsLead: ["dashboard", "approvals", "agents"],
-  HRBusinessPartner: ["dashboard", "approvals", "agents", "audit"],
+  ProjectManager: ["dashboard", "people", "log", "triage", "agents"],
+  OperationsLead: ["dashboard", "people", "approvals", "agents"],
+  HRBusinessPartner: ["dashboard", "people", "approvals", "agents", "audit"],
   Agent: [],
 };
 
@@ -57,6 +57,22 @@ const PERMS = {
   delete: ["SuperAdmin"], // destroying a case erases evidence — admin only
   acknowledge: ["Agent"], // digital signature on finalized cases
   audit: ["SuperAdmin", "HRBusinessPartner"], // read the immutable system log
+
+  /* ── Employee records ───────────────────────────────────────────────────
+     employeeRead is the door, not the whole house: holding it gets a role into
+     the directory, but which *rows* come back is narrowed per-request by
+     canViewEmployee() so a lead sees their own subtree and no further. */
+  employeeRead: ["SuperAdmin", "HRBusinessPartner", "OperationsLead", "ProjectManager"],
+  employeeWrite: ["SuperAdmin", "HRBusinessPartner"],
+  // Advancing someone's lifecycle stage — confirm probation, open a PIP, exit.
+  lifecycle: ["SuperAdmin", "HRBusinessPartner"],
+  /* Government identifiers and bank details. Deliberately narrower than
+     employeeRead and separate from employeeWrite: a lead legitimately needs to
+     know who reports to them without ever being able to pull an IBAN. Every
+     read is audited, because an unaudited PII read is indistinguishable from
+     exfiltration after the fact. */
+  piiRead: ["SuperAdmin", "HRBusinessPartner"],
+  piiWrite: ["SuperAdmin", "HRBusinessPartner"],
 };
 
 export const can = (user, action) => !!user && (PERMS[action] || []).includes(user.role);
