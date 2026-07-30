@@ -11,8 +11,11 @@ import { getLocale } from "@/lib/locale";
 import { GlassCard, GlassBadge, GlassStat, GlassProgress } from "@/components/glass";
 import AckCenter from "@/components/portal/AckCenter";
 import AgentClock from "@/components/portal/AgentClock";
+import MyRequests from "@/components/portal/MyRequests";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
+import { annualEntitlement } from "@/lib/employee.js";
+import { todayStr } from "@/lib/dates.js";
 import { statusOf } from "@/lib/engine.js";
 import { fmtMin, fmtDate, fmtDateLong, days } from "@/lib/format.js";
 import { addDays } from "@/lib/dates.js";
@@ -41,6 +44,15 @@ export default async function AgentPortalPage() {
     },
   });
 
+  /* The employment record behind this login, for the leave panel. Entitlement is
+     computed server-side because Art. 47's age-50 route needs the birth date,
+     which has no business in the client payload. */
+  const employment = await prisma.employee.findUnique({
+    where: { userId: me.id },
+    select: { hireDate: true, birthDate: true },
+  });
+  const entitlementDays = employment ? annualEntitlement(employment, todayStr()) : 0;
+
   const entries = rows.map(toEntry);
   const ref = { email: me.email, empId: me.empId || "" };
   const summary = agentSummary(entries, ref);
@@ -63,6 +75,9 @@ export default async function AgentPortalPage() {
       {/* The clock first: it is the thing an agent opens this page to use, and
           every other panel here is a read-only standing report. */}
       <AgentClock />
+
+      {/* Leave: balance, request form, history — the approval engine's agent side. */}
+      <MyRequests entitlementDays={entitlementDays} />
 
       {/* Pending acknowledgements — the alert + signature flow */}
       <AckCenter
