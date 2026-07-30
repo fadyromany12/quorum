@@ -73,6 +73,16 @@ const PERMS = {
      exfiltration after the fact. */
   piiRead: ["SuperAdmin", "HRBusinessPartner"],
   piiWrite: ["SuperAdmin", "HRBusinessPartner"],
+
+  /* ── Attendance ─────────────────────────────────────────────────────────
+     Punching for yourself needs no permission beyond having an employment
+     record — every role including Agent does it, and gating it would only
+     break the clock for whoever was left out of the list. */
+  // Punching on someone else's behalf. A real operation (an agent whose
+  // headset died, a system outage at login) but attributable and narrow.
+  punchOthers: ["SuperAdmin", "WFM", "OperationsLead", "ProjectManager"],
+  // The live floor view. WFM is the primary consumer; leads see their own scope.
+  floorView: ["SuperAdmin", "WFM", "OperationsLead", "ProjectManager", "HRBusinessPartner"],
 };
 
 export const can = (user, action) => !!user && (PERMS[action] || []).includes(user.role);

@@ -10,6 +10,7 @@ import { toEntry } from "@/lib/db";
 import { getLocale } from "@/lib/locale";
 import { GlassCard, GlassBadge, GlassStat, GlassProgress } from "@/components/glass";
 import AckCenter from "@/components/portal/AckCenter";
+import AgentClock from "@/components/portal/AgentClock";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
 import { statusOf } from "@/lib/engine.js";
@@ -59,6 +60,10 @@ export default async function AgentPortalPage() {
 
   return (
     <main className="grid gap-4">
+      {/* The clock first: it is the thing an agent opens this page to use, and
+          every other panel here is a read-only standing report. */}
+      <AgentClock />
+
       {/* Pending acknowledgements — the alert + signature flow */}
       <AckCenter
         locale={locale}
