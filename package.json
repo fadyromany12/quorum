@@ -9,7 +9,7 @@
     "// build": "prisma generate runs here because hosts cache node_modules — without it the client is stale or missing",
     "build": "prisma generate && next build",
     "start": "next start",
-    "test": "node test/engine.test.mjs && node test/employee.test.mjs && node test/employees-query.test.mjs && node test/effective.test.mjs && node test/comp.test.mjs && node test/attendance.test.mjs",
+    "test": "node test/engine.test.mjs && node test/employee.test.mjs && node test/employees-query.test.mjs && node test/effective.test.mjs && node test/comp.test.mjs && node test/attendance.test.mjs && node test/workflow.test.mjs",
     "test:e2e": "node test/e2e.mjs",
     "db": "node scripts/devdb.mjs start",
     "db:stop": "node scripts/devdb.mjs stop",
