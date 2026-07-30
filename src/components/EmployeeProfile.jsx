@@ -372,6 +372,9 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
         <ExitPanel employee={employee} onDone={async () => { await load(); onChanged?.(); }} />
       )}
 
+      {/* Clearance appears once someone is leaving; steps unlock in sequence. */}
+      {["Notice", "Exited"].includes(employee.stage) && <ClearancePanel employeeId={employeeId} />}
+
       {/* ── Timeline ── */}
       <Card
         title={<span className="inline-flex items-center gap-2"><Clock size={14} />Timeline</span>}
@@ -515,6 +518,61 @@ function ExitPanel({ employee, onDone }) {
       <div style={{ fontSize: 11, color: P.amber, marginTop: 9 }}>
         Exited is terminal — a returning employee gets a new record, because reusing
         this one would corrupt service years, leave accrual and disciplinary chains.
+      </div>
+    </Card>
+  );
+}
+
+/* The exit checklist. The API refuses out-of-order ticks with the reason, so
+   this panel just shows state and passes refusals through verbatim. */
+function ClearancePanel({ employeeId }) {
+  const [steps, setSteps] = useState(null);
+  const [complete, setComplete] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/employees/${employeeId}/clearance`);
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) { setSteps(json.steps); setComplete(json.complete); }
+  }, [employeeId]);
+  useEffect(() => { load(); }, [load]);
+
+  const tick = async (key) => {
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/clearance`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not complete the step.");
+      setSteps(json.steps); setComplete(json.complete);
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+
+  if (!steps) return null;
+  return (
+    <Card title={<span className="inline-flex items-center gap-2"><ShieldCheck size={14} />Exit clearance</span>}
+      right={complete && <Pill color={P.green}>Complete</Pill>}>
+      {error && <div className="mb-2" role="alert" style={{ fontSize: 12.5, color: P.brick }}>{error}</div>}
+      <div className="grid gap-2">
+        {steps.map((s) => (
+          <div key={s.key} className="flex items-center gap-3 p-2.5"
+            style={{ background: P.mist, borderRadius: 10, borderLeft: `3px solid ${s.state === "done" ? P.green : P.line}` }}>
+            <div className="min-w-0 flex-1">
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: s.state === "done" ? P.sub : P.ink }}>{s.label}</div>
+              <div style={{ fontSize: 11, color: P.sub }}>
+                {s.state === "done" ? `Done by ${s.doneByName}` : `${s.owner}${s.dependsOn ? " · unlocks in sequence" : ""}`}
+              </div>
+            </div>
+            {s.state !== "done" && (
+              <BtnGhost onClick={() => tick(s.key)} disabled={busy}>Mark done</BtnGhost>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: P.sub, marginTop: 8 }}>
+        Equipment cannot be collected before the handover is confirmed; HR signs off last.
       </div>
     </Card>
   );

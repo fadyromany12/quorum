@@ -275,6 +275,7 @@ model Employee {
   attendance   AttendanceEvent[]
   requests     Request[]            @relation("RequestSubject")
   leaveLedger  LeaveLedgerEntry[]
+  clearance    ClearanceStep[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -602,6 +603,26 @@ model LeaveLedgerEntry {
 
   @@unique([employeeId, type, monthKey])
   @@index([employeeId, at])
+}
+
+
+// ─── Exit clearance ──────────────────────────────────────────────────────────
+// Sequenced steps with dependencies: equipment cannot be collected before the
+// handover is confirmed. Rows are created when an exit is recorded; the pure
+// rules (src/lib/clearance.js) decide what may be ticked when.
+model ClearanceStep {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  key        String // handover | it-assets | facilities | finance | hr-final
+  label      String
+  owner      String @default("") // which function ticks it, for display
+  dependsOn  String @default("") // a step key, or "*" for "everything else"
+  state      String @default("pending") // pending | done
+  doneByName String @default("")
+  doneAt     DateTime?
+  note       String @default("")
+  @@unique([employeeId, key])
 }
 
 // The employee's timeline: one append-only row per thing that happened to them.
