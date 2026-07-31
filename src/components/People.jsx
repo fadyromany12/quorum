@@ -9,6 +9,7 @@
    fetched whole. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useReveal } from "../hooks/useReveal.js";
 import {
   Users, Search, RefreshCw, ChevronLeft, ChevronRight, Building2, UserPlus,
   CalendarDays, ShieldCheck, ArrowUpRight,
@@ -86,7 +87,7 @@ function PersonCard({ employee, managerName, onOpen }) {
     <button
       type="button"
       onClick={() => onOpen(employee.id)}
-      className="ao-lift text-left w-full"
+      className="ao-lift ao-reveal text-left w-full"
       style={{
         background: P.card, border: `1px solid ${P.line}`, borderRadius: 14,
         padding: 14, display: "grid", gap: 10, cursor: "pointer",
@@ -191,6 +192,9 @@ export default function People({
   /* Guards against a slow early request landing after a fast later one and
      overwriting it with stale rows. */
   const reqRef = useRef(0);
+  /* Cards reveal as they are scrolled to rather than all at mount. Keyed on the
+     rows so a new page or filter re-arms it for the replacements. */
+  const revealRef = useReveal(rows);
 
   const load = useCallback(async () => {
     const seq = ++reqRef.current;
@@ -406,7 +410,11 @@ export default function People({
       )}
 
       {rows !== null && rows.length > 0 && (
-        <div className="grid gap-3 ao-stagger" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))" }}>
+        <div
+          ref={revealRef}
+          className="grid gap-3"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))" }}
+        >
           {rows.map((e) => (
             <PersonCard
               key={e.id}

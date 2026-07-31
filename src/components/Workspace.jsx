@@ -688,23 +688,47 @@ function NavItem({ item, active, badge, onClick }) {
       data-active={active ? "true" : "false"}
       className="ao-disp ao-nav uppercase tracking-wide font-semibold flex items-center gap-2 transition group"
       style={{
+        position: "relative",
         fontSize: 12.5,
         padding: "9px 12px",
         borderRadius: 8,
         cursor: "pointer",
         textAlign: "left",
         width: "100%",
-        border: `1px solid ${active ? P.line : "transparent"}`,
-        background: active ? P.card : "transparent",
+        border: "1px solid transparent",
+        background: "transparent",
         color: active ? P.ink : P.sub,
       }}
     >
+      {/* The selection is its own element rather than a background on the
+          button, so exactly one of them exists at a time and the browser can
+          interpolate it from the old position to the new one. Painted behind
+          the label, and hidden from the accessibility tree — the button's own
+          state already says which is current. */}
+      {active && (
+        <span
+          aria-hidden="true"
+          className="ao-nav-marker"
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 8,
+            border: `1px solid ${P.line}`,
+            background: P.card,
+            zIndex: 0,
+          }}
+        />
+      )}
       <Icon
         size={15}
         color={active ? P.petrol : P.sub}
         className="transition-transform duration-200 group-hover:scale-110"
+        style={{ position: "relative", zIndex: 1, flexShrink: 0 }}
       />
-      <span className="flex-1 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">
+      <span
+        className="flex-1 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+        style={{ position: "relative", zIndex: 1 }}
+      >
         {item.label}
       </span>
       {badge > 0 && (
