@@ -38,10 +38,23 @@ export const GET = guarded(async () => {
     }
   }
 
+  /* "Not set" is accurate and unhelpful on its own. The overwhelmingly common
+     cause is not a missing variable but a variable saved after the last build:
+     hosts bake the environment in at build time, so saving one changes nothing
+     until something rebuilds. Saying so here turns a dead end into a next step.
+
+     Only shown when the variable is absent entirely — if it is present but
+     malformed, the length is the problem and a rebuild will not fix it. */
+  const notSet = !enc.active && /not set/i.test(enc.problem ?? "");
+  const hint = notSet
+    ? "Set in the host but still missing here? The environment is baked in at build time — redeploy so a new build picks it up, and check the variable applies to this environment."
+    : null;
+
   return NextResponse.json({
     piiEncryption: {
       active: enc.active,
       problem: enc.problem,
+      hint,
       fields: ENCRYPTED_PII_FIELDS,
       // "0 of 0" is the honest answer for an empty table, not "100%".
       storedValues: withValues,
@@ -51,7 +64,9 @@ export const GET = guarded(async () => {
         ? "Values written before encryption was switched on stay readable until each record is next saved."
         : null,
     },
-    email: { configured: !!process.env.RESEND_API_KEY },
-    scheduledJobs: { configured: !!process.env.CRON_SECRET },
+    // Same reasoning as the hint above: these two fail the same way, for the
+    // same reason, and a bare `false` sends the reader looking in the wrong place.
+    email: { configured: !!process.env.RESEND_API_KEY, hint: process.env.RESEND_API_KEY ? null : hint },
+    scheduledJobs: { configured: !!process.env.CRON_SECRET, hint: process.env.CRON_SECRET ? null : hint },
   });
 });
