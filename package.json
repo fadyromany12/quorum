@@ -14,7 +14,8 @@
     "db": "node scripts/devdb.mjs start",
     "db:stop": "node scripts/devdb.mjs stop",
     "db:push": "prisma db push",
-    "db:seed": "node prisma/seed.mjs"
+    "db:seed": "node prisma/seed.mjs",
+    "key:gen": "node -e \"console.log(require('./src/lib/pii-crypto.js').generateKey())\""
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
