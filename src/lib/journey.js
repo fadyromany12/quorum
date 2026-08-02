@@ -113,7 +113,7 @@ export const NAV_SECTIONS = [
   {
     id: "records",
     label: "Records",
-    tabs: ["people", "audit"],
+    tabs: ["people", "roster", "audit"],
   },
   {
     id: "setup",

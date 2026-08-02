@@ -38,17 +38,17 @@ export function passwordProblem(pw) {
 export const TABS_FOR = {
   SuperAdmin: [
     "dashboard", "joining", "floor", "requests", "approvals", "log", "rta",
-    "triage", "agents", "leaving", "people", "audit", "matrix", "users", "settings",
+    "triage", "agents", "leaving", "people", "roster", "audit", "matrix", "users", "settings",
   ],
   // WFM owns real-time adherence, so the floor is their primary screen.
   WFM: ["floor", "rta"],
-  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "triage", "agents", "leaving", "people"],
-  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "agents", "leaving", "people"],
+  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "triage", "agents", "leaving", "people", "roster"],
+  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "agents", "leaving", "people", "roster"],
   /* HR owns both ends of the journey — admitting people and exiting them — so
      joining and leaving are theirs before anyone else's. */
   HRBusinessPartner: [
     "dashboard", "joining", "floor", "requests", "approvals",
-    "triage", "agents", "leaving", "people", "audit",
+    "triage", "agents", "leaving", "people", "roster", "audit",
   ],
   Agent: [],
 };

@@ -80,6 +80,7 @@ const TAB_META = {
   agents: { label: "Scorecards", icon: Users },
   leaving: { label: "Leavers", icon: UserMinus },
   people: { label: "Directory", icon: IdCard },
+  roster: { label: "All employees", icon: Table2 },
   audit: { label: "Audit trail", icon: ScrollText },
   matrix: { label: "Discipline matrix", icon: Table2 },
   users: { label: "Accounts", icon: UserCog },
@@ -246,7 +247,7 @@ export default function Workspace({ initial, me, themeIntent }) {
   // "people" is in this list for a different reason than the rest: the others
   // are admin screens, but the directory genuinely has its own data source and
   // is meaningful with an empty case ledger.
-  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "joining", "leaving", "floor", "requests"].includes(tab);
+  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests"].includes(tab);
 
   return (
     <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
@@ -565,6 +566,19 @@ export default function Workspace({ initial, me, themeIntent }) {
             {/* The directory is independent of the case ledger — an org with no
                 violations logged still has people in it. */}
             {tab === "people" && <People accounts={data.accounts} me={me} />}
+
+            {/* The whole population as a table. Cards are right for browsing
+                twenty people and useless for scanning two hundred. */}
+            {tab === "roster" && (
+              <People
+                accounts={data.accounts}
+                me={me}
+                view="table"
+                everyone
+                heading="All employees"
+                blurb="Everyone on record, including applicants and leavers. Sort any column; click a row to open the record."
+              />
+            )}
 
             {/* The two ends of the journey. Same directory, filtered to the
                 stages that phase covers — a separate component would be a

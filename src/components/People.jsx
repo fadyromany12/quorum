@@ -155,8 +155,118 @@ function PersonCard({ employee, managerName, onOpen }) {
  * preset the chips filter *within* the phase, so a stage outside it can never
  * be reached by accident.
  */
+
+/* The whole population as a table.
+
+   Cards are right for browsing twenty people and useless for scanning two
+   hundred — you cannot compare a column that is not in a column. This is the
+   same data, same filters, same drill-in, laid out to be read down rather than
+   across.
+
+   Sorting goes to the server, not to the visible page. Sorting the fifty rows
+   you can see is a lie the moment there is a second page: "earliest hire date"
+   would mean "earliest on this page", which is a different and useless fact. */
+const COLUMNS = [
+  { key: "name", label: "Name", sortable: true, grow: true },
+  { key: "empId", label: "ID", sortable: true, mono: true },
+  { key: "jobTitle", label: "Job title" },
+  { key: "account", label: "Account" },
+  { key: "lob", label: "Line" },
+  { key: "stage", label: "Status" },
+  { key: "manager", label: "Reports to" },
+  { key: "hireDate", label: "Hired", sortable: true, mono: true },
+  { key: "service", label: "Service", align: "right" },
+  { key: "leave", label: "Leave", align: "right", title: "Annual entitlement in days" },
+];
+
+function EmployeeTable({ rows, nameById, sort, onSort, onOpen }) {
+  const today = todayStr();
+  const th = {
+    textAlign: "left", padding: "8px 10px", fontSize: 10, letterSpacing: 0.6,
+    color: P.sub, whiteSpace: "nowrap", borderBottom: `1px solid ${P.line}`,
+  };
+  const td = {
+    padding: "9px 10px", fontSize: 12.5, color: P.ink,
+    borderBottom: `1px solid ${P.line}`, whiteSpace: "nowrap",
+  };
+
+  return (
+    <div style={{ overflowX: "auto", border: `1px solid ${P.line}`, borderRadius: 12, background: P.card }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 940 }}>
+        <thead>
+          <tr>
+            {COLUMNS.map((c) => {
+              const active = sort === c.key || (c.key === "name" && sort === "name");
+              return (
+                <th key={c.key} scope="col" title={c.title}
+                  style={{ ...th, textAlign: c.align === "right" ? "right" : "left" }}
+                  className="ao-disp uppercase">
+                  {c.sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(c.key)}
+                      aria-label={`Sort by ${c.label}`}
+                      style={{
+                        border: "none", background: "none", cursor: "pointer", padding: 0,
+                        font: "inherit", letterSpacing: "inherit",
+                        color: active ? P.petrol : P.sub,
+                      }}
+                    >
+                      {c.label}{active ? " ↓" : ""}
+                    </button>
+                  ) : c.label}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((e) => {
+            const years = e.hireDate ? completedYears(e.hireDate, today) : null;
+            const meta = STAGE_STYLE[e.stage] ?? {};
+            return (
+              <tr
+                key={e.id}
+                onClick={() => onOpen(e.id)}
+                tabIndex={0}
+                onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), onOpen(e.id))}
+                className="ao-row"
+                style={{ cursor: "pointer" }}
+                aria-label={`Open ${displayName(e)}'s record`}
+              >
+                <td style={{ ...td, fontWeight: 500 }}>
+                  <span className="inline-flex items-center gap-2">
+                    <Avatar employee={e} />
+                    {displayName(e)}
+                  </span>
+                </td>
+                <td style={{ ...td, color: P.sub }} className="ao-mono">{e.empId}</td>
+                <td style={{ ...td, color: P.inkSoft }}>{e.jobTitle || "—"}</td>
+                <td style={{ ...td, color: P.inkSoft }}>{e.account || "—"}</td>
+                <td style={{ ...td, color: P.inkSoft }}>{e.lob || "—"}</td>
+                <td style={td}>
+                  <span style={{ color: meta.color ?? P.sub, fontSize: 11.5 }}>{meta.label ?? e.stage}</span>
+                </td>
+                <td style={{ ...td, color: P.inkSoft }}>{nameById[e.directManagerId] || "—"}</td>
+                <td style={{ ...td, color: P.sub }} className="ao-mono">{e.hireDate || "—"}</td>
+                <td style={{ ...td, textAlign: "right", color: P.inkSoft }}>
+                  {years === null ? "—" : years === 0 ? "<1 yr" : `${years} yr`}
+                </td>
+                <td style={{ ...td, textAlign: "right", color: P.inkSoft }} className="ao-mono">
+                  {e.entitlementDays ?? "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function People({
   accounts = [], me = null, stages = null, heading = "People", blurb = "",
+  view = "cards", everyone = false,
 }) {
   const [rows, setRows] = useState(null); // null = loading
   const [total, setTotal] = useState(0);
@@ -165,7 +275,10 @@ export default function People({
   const [q, setQ] = useState("");
   const [account, setAccount] = useState("All");
   const [stage, setStage] = useState("All");
-  const [includeExited, setIncludeExited] = useState(false);
+  /* The roster is the whole population by definition — hiding leavers and
+     applicants from a screen called "All employees" would make it lie. */
+  const [includeExited, setIncludeExited] = useState(everyone);
+  const [sort, setSort] = useState("name");
   const [openId, setOpenId] = useState(null);
   const [admitting, setAdmitting] = useState(false);
 
@@ -187,7 +300,7 @@ export default function People({
      builds the list inline hands over a new array every render, and an effect
      that depends on the reference would re-fire forever. */
   const stageKey = (stages ?? []).join(",");
-  useEffect(() => setPage(1), [debouncedQ, account, stage, includeExited, stageKey]);
+  useEffect(() => setPage(1), [debouncedQ, account, stage, includeExited, stageKey, sort]);
 
   /* Guards against a slow early request landing after a fast later one and
      overwriting it with stale rows. */
@@ -208,6 +321,8 @@ export default function People({
     if (stage !== "All") params.set("stage", stage);
     else if (stageKey) params.set("stage", stageKey);
     if (includeExited) params.set("includeExited", "1");
+    if (everyone) params.set("includeApplicants", "1");
+    if (sort) params.set("sort", sort);
 
     try {
       const res = await fetch(`/api/employees?${params}`);
@@ -226,7 +341,7 @@ export default function People({
       setError(err.message);
       setRows([]);
     }
-  }, [page, debouncedQ, account, stage, includeExited, stageKey]);
+  }, [page, debouncedQ, account, stage, includeExited, stageKey, sort, everyone]);
 
   useEffect(() => {
     load();
@@ -409,7 +524,11 @@ export default function People({
         </Muted>
       )}
 
-      {rows !== null && rows.length > 0 && (
+      {rows !== null && rows.length > 0 && view === "table" && (
+        <EmployeeTable rows={rows} nameById={nameById} sort={sort} onSort={setSort} onOpen={setOpenId} />
+      )}
+
+      {rows !== null && rows.length > 0 && view !== "table" && (
         <div
           ref={revealRef}
           className="grid gap-3"

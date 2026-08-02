@@ -568,3 +568,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
     transform: none !important;
   }
 }
+
+/* Table rows are clickable, so they need the same affordance a card gets —
+   without the lift, which would break the alignment a table exists to provide. */
+.ao-row { transition: background-color var(--dur-instant) ease; }
+.ao-row:hover { background: var(--well); }
+.ao-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--signal) 70%, transparent); outline-offset: -2px; }
