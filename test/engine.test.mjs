@@ -12,7 +12,19 @@ const eq = (label, got, want) => {
   else { fail++; console.log(`  FAIL ${label}\n         got:  ${JSON.stringify(got)}\n         want: ${JSON.stringify(want)}`); }
 };
 
-const T = todayStr();
+/* A fixed anchor, not today.
+
+   These tests used `todayStr()`, which made four of them fail on the 1st and
+   2nd of any month and pass for the rest of it. The per-month deduction cap
+   counts within a calendar month, so `D(2)` and `D(1)` land either side of a
+   month boundary whenever the run happens early in a month — the engine was
+   right to stop counting July's deduction against August, and the test was
+   wrong to assume both dates shared a month.
+
+   A suite whose result depends on the day it runs is not testing the rule. The
+   anchor is mid-month so day arithmetic in either direction stays inside it,
+   and every case that genuinely cares about a boundary now has to say so. */
+const T = "2026-06-15";
 const D = (n) => addDays(T, -n);
 let seq = 0;
 const mk = (o) => ({
@@ -143,7 +155,7 @@ console.log("\n── Soft delete (void) ──");
   ]);
   eq("voided frees month headroom", settled.find((e) => !e.voided).deductionApplied, 5);
   // Voided cases raise no systemic escalation flag.
-  const flags = computeEscalations([mk({ date: D(5), violation: "NCNS", voided: true }), mk({ date: D(20), violation: "NCNS", voided: true })]);
+  const flags = computeEscalations([mk({ date: D(5), violation: "NCNS", voided: true }), mk({ date: D(20), violation: "NCNS", voided: true })], T);
   eq("voided raises no escalation flag", flags.length, 0);
 }
 
@@ -186,17 +198,17 @@ console.log("\n── Escalation flags ──");
     mk({ date: D(10), violation: "Exceeding break time" }),
     mk({ date: D(20), violation: "NCNS" }),
   ];
-  const f = computeEscalations(es);
+  const f = computeEscalations(es, T);
   eq("3-in-30 fires", f.some((x) => x.kind === "3in30"), true);
 }
 {
   const es = [mk({ date: D(5), violation: "NCNS" }), mk({ date: D(20), violation: "NCNS" })];
-  const f = computeEscalations(es);
+  const f = computeEscalations(es, T);
   eq("repeat NCNS fires", f.some((x) => x.kind === "ncns"), true);
 }
 {
   const es = [mk({ date: D(5), violation: "Late login / tardy", stage: "dismissed" })];
-  eq("dismissed raises no flag", computeEscalations(es).length, 0);
+  eq("dismissed raises no flag", computeEscalations(es, T).length, 0);
 }
 
 /* ── v4 additions: identity, compensation, RTA, auth ─────────────────────── */

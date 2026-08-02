@@ -28,6 +28,7 @@ import {
   EXIT_TYPES, EXIT_TYPE_CODES, EXIT_REASONS, exitReasonsFor,
   isVoluntaryExit, attritionClass,
 } from "../lib/taxonomy.js";
+import { TRAINING_TYPES } from "../lib/taxonomy.js";
 import { Avatar, StageChip } from "./People.jsx";
 
 /* Each timeline type gets an icon and a colour so the record can be skimmed —
@@ -42,6 +43,7 @@ const EVENT_STYLE = {
   LEAVE_APPROVED: { icon: CalendarDays, color: P.petrol, label: "Leave" },
   VIOLATION_LOGGED: { icon: AlertTriangle, color: P.brick, label: "Violation" },
   COACHING_LOGGED: { icon: GraduationCap, color: P.amber, label: "Coaching" },
+  TRAINING_COMPLETED: { icon: GraduationCap, color: P.green, label: "Training" },
   PIP_OPENED: { icon: AlertTriangle, color: P.amber, label: "PIP opened" },
   PIP_CLOSED: { icon: ShieldCheck, color: P.green, label: "PIP closed" },
   ASSET_ISSUED: { icon: IdCard, color: P.sub, label: "Asset" },
@@ -396,6 +398,10 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
       )}
 
       {/* Clearance appears once someone is leaving; steps unlock in sequence. */}
+      {/* Training sits above clearance because it belongs to the working part of
+          the journey — and readiness is the answer operations wants first. */}
+      <TrainingPanel employeeId={employeeId} onChanged={load} />
+
       {["Notice", "Exited"].includes(employee.stage) && <ClearancePanel employeeId={employeeId} />}
 
       {/* ── Timeline ── */}
@@ -598,6 +604,138 @@ function ExitPanel({ employee, onDone }) {
         Exited is terminal — a returning employee gets a new record, because reusing
         this one would corrupt service years, leave accrual and disciplinary chains.
       </div>
+    </Card>
+  );
+}
+
+
+/* Training. The readiness verdict leads, because "can this person take contacts
+   today" is the question the screen exists to answer — the course list is the
+   evidence for it, not the point of it. */
+function TrainingPanel({ employeeId, onChanged }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/training`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not load training.");
+      setData(json);
+    } catch (err) { setError(err.message); setData({ records: [] }); }
+  }, [employeeId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const record = async (type, state) => {
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/training`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type, state,
+          completedOn: state === "completed" ? todayStr() : "",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not record it.");
+      setAdding("");
+      await load();
+      onChanged?.();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+
+  const STATUS = {
+    completed: { color: P.green, label: "Valid" },
+    expiringSoon: { color: P.amber, label: "Expiring" },
+    expired: { color: P.brick, label: "Lapsed" },
+    planned: { color: P.sub, label: "Planned" },
+    inProgress: { color: P.petrol, label: "In progress" },
+    failed: { color: P.brick, label: "Failed" },
+    cancelled: { color: P.sub, label: "Cancelled" },
+  };
+
+  const ready = data?.readiness;
+  const recorded = new Set((data?.records ?? []).map((r) => r.type));
+  const addable = Object.keys(TRAINING_TYPES).filter((t) => !recorded.has(t));
+
+  return (
+    <Card title={<span className="inline-flex items-center gap-2"><GraduationCap size={14} />Training</span>}
+      right={<BtnGhost onClick={load} icon={RefreshCw} disabled={busy}>Refresh</BtnGhost>}>
+      {error && <div className="mb-3" role="alert" style={{ fontSize: 13, color: P.brick }}>{error}</div>}
+
+      {!data && <div className="ao-skeleton" style={{ height: 64, borderRadius: 12 }} />}
+
+      {ready && (
+        <div
+          className="flex items-center gap-3 flex-wrap mb-3"
+          style={{
+            background: ready.ready ? P.greenWash : P.amberWash,
+            border: `1px solid ${ready.ready ? P.green : P.amber}`,
+            borderRadius: 12, padding: "10px 13px",
+          }}
+        >
+          {ready.ready ? <ShieldCheck size={15} color={P.green} /> : <AlertTriangle size={15} color={P.amber} />}
+          <div className="flex-1 min-w-0">
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: ready.ready ? P.green : P.amber }}>
+              {ready.ready ? "Cleared for live contacts" : "Not cleared for live contacts"}
+            </div>
+            <div style={{ fontSize: 11.5, color: P.inkSoft }}>{ready.reason}</div>
+          </div>
+        </div>
+      )}
+
+      {data?.records?.length > 0 && (
+        <div className="grid gap-1.5">
+          {data.records.map((r) => {
+            const meta = STATUS[r.status] ?? STATUS.planned;
+            return (
+              <div key={r.type} className="flex items-center gap-2.5 flex-wrap"
+                style={{ background: "var(--well)", border: `1px solid ${P.line}`, borderRadius: 10, padding: "8px 11px" }}>
+                <Pill color={meta.color}>{meta.label}</Pill>
+                <span style={{ fontSize: 12.5, color: P.ink }}>{r.label}</span>
+                {r.blocksProduction && (
+                  <span style={{ fontSize: 10.5, color: P.sub }}>blocks the floor</span>
+                )}
+                <span className="flex-1" />
+                {r.completedOn && (
+                  <span className="ao-mono" style={{ fontSize: 11, color: P.sub }}>
+                    {r.completedOn}{r.expiresOn ? ` → ${r.expiresOn}` : ""}
+                  </span>
+                )}
+                {r.state !== "completed" && (
+                  <BtnGhost onClick={() => record(r.type, "completed")} disabled={busy}>Mark complete</BtnGhost>
+                )}
+                {r.status === "expired" && (
+                  <BtnGhost onClick={() => record(r.type, "completed")} disabled={busy}>Renew</BtnGhost>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {data && !data.records?.length && <Muted>Nothing recorded yet.</Muted>}
+
+      {addable.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap mt-3">
+          <select
+            value={adding}
+            onChange={(e) => setAdding(e.target.value)}
+            aria-label="Add a course"
+            style={{ fontSize: 12, padding: "6px 10px", borderRadius: 9, border: `1px solid ${P.line}`, background: P.card, color: P.inkSoft }}
+          >
+            <option value="">Add a course…</option>
+            {addable.map((t) => <option key={t} value={t}>{TRAINING_TYPES[t].label}</option>)}
+          </select>
+          <BtnGhost onClick={() => record(adding, "planned")} disabled={busy || !adding}>Plan</BtnGhost>
+          <BtnGhost onClick={() => record(adding, "completed")} disabled={busy || !adding}>Record as done</BtnGhost>
+        </div>
+      )}
     </Card>
   );
 }

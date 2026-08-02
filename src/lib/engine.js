@@ -338,9 +338,15 @@ export function decideCases(entries, ids, stage, { by, assignee, comment }, dcm)
    These look across violations rather than at one rule, and fire on patterns
    the matrix alone would miss. */
 
-export function computeEscalations(entries) {
+/**
+ * @param {Array<object>} entries
+ * @param {string} [today] the day the windows are measured from. Injectable for
+ *   the same reason slaFor's is: a function that reads the wall clock cannot be
+ *   tested against a fixed scenario, and a test that works around it by dating
+ *   its fixtures relative to now is testing the calendar rather than the rule.
+ */
+export function computeEscalations(entries, today = todayStr()) {
   const live = entries.filter(countsForDiscipline);
-  const today = todayStr();
   const byAgent = {};
 
   for (const e of live) {

@@ -276,6 +276,7 @@ model Employee {
   requests     Request[]            @relation("RequestSubject")
   leaveLedger  LeaveLedgerEntry[]
   clearance    ClearanceStep[]
+  training     TrainingRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -623,6 +624,40 @@ model ClearanceStep {
   doneAt     DateTime?
   note       String @default("")
   @@unique([employeeId, key])
+}
+
+// What someone has been trained on. The middle of the journey that was modelled
+// in the taxonomy and stored nowhere.
+//
+// No `expiresOn` column, deliberately: expiry is a function of the completion
+// date and the type's validity period, so it is correct on read whether or not
+// any scheduled job has run. A stored expiry is wrong from midnight until
+// something fixes it, and the thing that would fix it is the job you cannot
+// depend on.
+model TrainingRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  type  String // a TRAINING_TYPES code — see src/lib/taxonomy.js
+  state String @default("planned") // planned | inProgress | completed | failed | cancelled
+
+  plannedOn   String @default("") // YYYY-MM-DD
+  completedOn String @default("") // set only when state is completed
+  score       String @default("") // free-form: "82%", "Pass", ""
+  provider    String @default("")
+  note        String @default("")
+
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One live record per person per course. A retake supersedes rather than
+  // duplicates, so "is this person certified" has one answer — history stays on
+  // the timeline, which is where history belongs.
+  @@unique([employeeId, type])
+  @@index([employeeId])
 }
 
 // The employee's timeline: one append-only row per thing that happened to them.
