@@ -119,7 +119,7 @@ export function requiredFor(employee = {}) {
  * @param {Array<{type: string, state: string, completedOn?: string}>} records
  * @param {{account?: string}} [employee]
  * @param {string} [today]
- * @returns {{ready: boolean, missing: string[], lapsed: string[], reason: string}}
+ * @returns {{ready: boolean, missing: string[], incomplete: string[], lapsed: string[], reason: string}}
  */
 export function readiness(records, employee = {}, today = todayStr()) {
   const required = requiredFor(employee);
@@ -137,21 +137,38 @@ export function readiness(records, employee = {}, today = todayStr()) {
     if (better || (isValid(r, today) === isValid(prev, today) && newer)) held.set(r.type, r);
   }
 
+  /* Three distinct ways a requirement goes unmet, and they are not synonyms.
+     "Lapsed" means it was earned and has expired — a manager reading it looks
+     for an expiry date. Saying that about a course somebody merely booked sends
+     them hunting for a date that does not exist. */
   const missing = blocking.filter((c) => !held.has(c));
-  const lapsed = blocking.filter((c) => held.has(c) && !isValid(held.get(c), today));
+  const incomplete = blocking.filter(
+    (c) => held.has(c) && held.get(c).state !== "completed");
+  const lapsed = blocking.filter(
+    (c) => held.has(c) && held.get(c).state === "completed" && !isValid(held.get(c), today));
 
   /* Fails closed: no records at all is "not ready", not "nothing outstanding".
      Normal set logic would clear every new joiner on their first day — the
      exact people this check exists for. */
-  const ready = blocking.length > 0 && missing.length === 0 && lapsed.length === 0;
+  const ready = blocking.length > 0 && !missing.length && !incomplete.length && !lapsed.length;
 
   const name = (c) => TRAINING_TYPES[c]?.label ?? c;
+  /* Every unmet requirement is named, not just the first category to be
+     non-empty. Someone missing three things and lapsed on a fourth needs the
+     whole list — telling them one at a time is four trips. */
+  const parts = [];
+  if (missing.length) parts.push(`not started: ${missing.map(name).join(", ")}`);
+  if (incomplete.length) parts.push(`in progress: ${incomplete.map(name).join(", ")}`);
+  if (lapsed.length) parts.push(`lapsed: ${lapsed.map(name).join(", ")}`);
+
   let reason = "Cleared for live contacts.";
   if (!blocking.length) reason = "No training requirements are configured.";
-  else if (missing.length) reason = `Not started: ${missing.map(name).join(", ")}.`;
-  else if (lapsed.length) reason = `Lapsed: ${lapsed.map(name).join(", ")}.`;
+  else if (parts.length) {
+    const joined = parts.join("; ");
+    reason = `${joined.charAt(0).toUpperCase()}${joined.slice(1)}.`;
+  }
 
-  return { ready, missing, lapsed, reason };
+  return { ready, missing, incomplete, lapsed, reason };
 }
 
 /**

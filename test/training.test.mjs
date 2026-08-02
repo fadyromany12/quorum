@@ -70,7 +70,7 @@ console.log("\n── Readiness fails closed ──");
 {
   const r = T.readiness([], { account: "Lenovo" }, TODAY);
   eq("someone with no training at all is not ready", r.ready, false);
-  eq("and the reason names what is missing", /Not started/.test(r.reason), true);
+  eq("and the reason names what is missing", /not started/i.test(r.reason), true);
 }
 {
   const full = ["Induction", "ProductInitial", "SystemsTraining", "Nesting", "Certification"]
@@ -96,7 +96,7 @@ console.log("\n── Readiness fails closed ──");
   const r = T.readiness(recs, { account: "Lenovo" }, TODAY);
   eq("a lapsed certification blocks", r.ready, false);
   eq("it is reported as lapsed, not missing", [r.lapsed, r.missing], [["Certification"], []]);
-  eq("and the reason distinguishes the two", /Lapsed/.test(r.reason), true);
+  eq("and the reason distinguishes the two", /lapsed/i.test(r.reason), true);
 }
 {
   /* A lapsed *refresher* must not block. What stops someone taking contacts is
@@ -120,6 +120,37 @@ console.log("\n── Readiness fails closed ──");
 {
   const recs = ["Induction", "ProductInitial", "SystemsTraining", "Nesting"].map((t) => rec(t, "completed", "2026-07-01"));
   eq("off an account, certification is not demanded", T.readiness(recs, {}, TODAY).ready, true);
+}
+
+{
+  /* Booked but not finished is neither "not started" nor "lapsed". Calling it
+     lapsed sends a manager looking for an expiry date that does not exist. */
+  const recs = [
+    rec("Induction", "completed", "2026-07-01"),
+    rec("ProductInitial", "completed", "2026-07-01"),
+    { type: "SystemsTraining", state: "inProgress", completedOn: "" },
+    { type: "Nesting", state: "planned", completedOn: "" },
+    rec("Certification", "completed", "2026-07-01"),
+  ];
+  const r = T.readiness(recs, { account: "Lenovo" }, TODAY);
+  eq("a booked-but-unfinished course is not ready", r.ready, false);
+  eq("it is neither missing nor lapsed",
+    [r.missing, r.lapsed], [[], []]);
+  eq("it is in progress", r.incomplete, ["SystemsTraining", "Nesting"]);
+  eq("and the wording says so", /in progress/i.test(r.reason), true);
+  eq("and does not say lapsed", /lapsed/i.test(r.reason), false);
+}
+{
+  // Several categories at once: the reason must name all of them, not the first.
+  const recs = [
+    rec("Induction", "completed", "2026-07-01"),
+    { type: "Nesting", state: "planned", completedOn: "" },
+    rec("Certification", "completed", "2024-01-01"),
+  ];
+  const r = T.readiness(recs, { account: "Lenovo" }, TODAY);
+  eq("every unmet category appears",
+    [/not started/i.test(r.reason), /in progress/i.test(r.reason), /lapsed/i.test(r.reason)],
+    [true, true, true]);
 }
 
 console.log("\n── What needs attention ──");
