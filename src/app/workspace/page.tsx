@@ -9,6 +9,7 @@ import { publicUser } from "@/lib/users-public";
 import Workspace from "@/components/Workspace.jsx";
 import { getThemeIntent } from "@/lib/theme-server";
 import { visibilityScope } from "@/lib/employee-db";
+import { accountNames, normaliseAccounts } from "@/lib/org.js";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,12 @@ export default async function WorkspacePage() {
   const initial = {
     entries,
     dcm,
-    accounts: (config?.accounts as string[]) ?? [],
+    /* Two views of the same column. `accounts` stays a flat name list because
+       ten screens filter by it and none of them care about lines of business;
+       `org` is the structured form, for the settings editor and the forms that
+       need to offer the right lines for the chosen account. */
+    accounts: accountNames(config?.accounts),
+    org: normaliseAccounts(config?.accounts),
     tls: (config?.tls as string[]) ?? [],
     users: users.map(publicUser),
     headcount,

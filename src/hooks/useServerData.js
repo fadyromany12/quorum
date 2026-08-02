@@ -9,6 +9,7 @@
    debounced and applied optimistically. */
 
 import { useCallback, useRef, useState } from "react";
+import { accountNames, normaliseAccounts } from "../lib/org.js";
 
 export function useServerData(initial) {
   const [data, setData] = useState(initial);
@@ -110,9 +111,15 @@ export function useServerData(initial) {
         800
       );
     },
-    setAccounts: (accounts) => {
-      setData((d) => ({ ...d, accounts }));
-      call("/api/config", "PUT", { accounts, tls: data.tls }).then(() => toast("Accounts saved."), swallow);
+    /* The editor hands back the structured org. Both views are updated together
+       — the flat name list the filters read, and the nested one the forms read
+       — because updating one and reloading for the other means the account
+       dropdown disagrees with the settings screen until someone refreshes. */
+    setAccounts: (org) => {
+      const structured = normaliseAccounts(org);
+      setData((d) => ({ ...d, org: structured, accounts: accountNames(structured) }));
+      call("/api/config", "PUT", { accounts: structured, tls: data.tls })
+        .then(() => toast("Accounts saved."), swallow);
     },
     setTls: (tls) => {
       setData((d) => ({ ...d, tls }));

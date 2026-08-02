@@ -14,7 +14,7 @@ import { uid } from "../lib/format.js";
 import { verdictFor } from "../lib/engine.js";
 import { agentSummary } from "../lib/agents.js";
 import { agentMatches } from "../lib/identity.js";
-import { LOBS } from "../lib/constants.js";
+import { lobsFor } from "../lib/org.js";
 
 const blank = (accounts, tls, defaultAccount) => ({
   account: defaultAccount && defaultAccount !== "All" ? defaultAccount : accounts[0] || "",
@@ -149,7 +149,9 @@ export default function LogForm({ data, onAdd, onCancel, defaultAccount }) {
           <Field label="Line of business">
             <TSelect value={f.lob} onChange={(e) => set("lob", e.target.value)}>
               <option value="">—</option>
-              {LOBS.map((l) => (
+              {/* Only the lines this account actually has — a shared list used
+                  to offer Hertz a line that exists only on Lenovo. */}
+              {lobsFor(data.org, f.account).map((l) => (
                 <option key={l}>{l}</option>
               ))}
             </TSelect>
