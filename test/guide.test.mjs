@@ -68,7 +68,10 @@ ok("an Operations Lead is not told about case review", !mentions("OperationsLead
 ok("a Project Manager is told they can log an event", mentions("ProjectManager", /log an attendance or conduct event/i));
 ok("a Project Manager is not told they can approve", !mentions("ProjectManager", /waiting on you/i));
 ok("WFM is told about the adherence import", mentions("WFM", /adherence report/i));
-ok("WFM, whose two screens are the floor and the import, gets a short guide", G.guideFor("WFM").length <= 4);
+ok("WFM owns the plan as well as the floor", mentions("WFM", /queue needs hour by hour/i) && mentions("WFM", /demand forecast/i));
+ok("WFM still sees far less than a Super Admin — theirs is a focused screen set",
+  G.guideFor("WFM").length < G.guideFor("SuperAdmin").length / 2);
+ok("and nothing about people they do not administer", !mentions("WFM", /directory|scorecard|audit/i));
 ok("HR is told about both ends of the journey",
   mentions("HRBusinessPartner", /accepted offer/i) && mentions("HRBusinessPartner", /serving notice/i));
 ok("a Super Admin sees the most of anyone",

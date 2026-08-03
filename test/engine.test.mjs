@@ -329,9 +329,12 @@ console.log("\n── RBAC + password hashing ──");
 {
   eq("six roles incl. Agent", [ROLES.length, ROLES.includes("Agent")], [6, true]);
   eq("agents have no workspace tabs", TABS_FOR.Agent.length, 0);
-  // WFM owns real-time adherence, so the live floor is their primary screen —
-  // but they still never reach the case pipeline.
-  eq("WFM sees the floor and RTA, nothing else", TABS_FOR.WFM, ["floor", "rta"]);
+  /* WFM owns the plan and the floor it plays out on — but they still never
+     reach the case pipeline, the directory, or anything about a person that is
+     not their hours. The exact list is asserted rather than a length, because
+     the failure worth catching is a screen quietly appearing in it. */
+  eq("WFM sees planning, the floor and the import, nothing else", TABS_FOR.WFM, ["wfm", "floor", "rta"]);
+  eq("WFM cannot open the directory", TABS_FOR.WFM.includes("people"), false);
   eq("WFM still cannot touch cases", can({ role: "WFM" }, "caseWrite"), false);
   // Fleet-wide roles are unscoped by design: a WFM analyst usually has no direct
   // reports, so a subtree scope would show them themselves and nobody else.

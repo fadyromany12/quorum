@@ -81,12 +81,16 @@ console.log("\n── Building a role's navigation ──");
     nav.map((s) => s.id), ["overview", "join", "work", "grow", "leave", "records", "setup"]);
 }
 {
-  /* WFM holds two screens. They should see one heading with two entries, not
-     seven headings with two entries scattered among five empty ones. */
+  /* WFM's screens all live in one phase. They should see one heading with
+     their whole screen set under it, not seven headings with three entries
+     scattered among five empty ones. */
   const nav = J.navFor(A.TABS_FOR.WFM);
   eq("empty sections are dropped", nav.length, 1);
   eq("WFM's screens sit under Working", nav[0].id, "work");
-  eq("and both are there", nav[0].items.map((i) => i.id), ["floor", "rta"]);
+  /* Navigation order is the journey's, not the role's — the tab list happens to
+     name planning first, and the sidebar still shows the floor before it. */
+  eq("all of them are there, in the navigation's order",
+    nav[0].items.map((i) => i.id), ["floor", "wfm", "rta"]);
 }
 {
   const nav = J.navFor(A.TABS_FOR.HRBusinessPartner);

@@ -37,13 +37,15 @@ export function passwordProblem(pw) {
    they live in /agent-portal, enforced by the route-group layouts. */
 export const TABS_FOR = {
   SuperAdmin: [
-    "dashboard", "joining", "floor", "requests", "approvals", "log", "rta",
+    "dashboard", "joining", "floor", "requests", "approvals", "log", "rta", "wfm",
     "triage", "agents", "leaving", "people", "roster", "audit", "matrix", "users", "settings",
   ],
-  // WFM owns real-time adherence, so the floor is their primary screen.
-  WFM: ["floor", "rta"],
-  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "triage", "agents", "leaving", "people", "roster"],
-  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "agents", "leaving", "people", "roster"],
+  /* WFM owns real-time adherence and the plan behind it. The planning screen is
+     their primary one now — the floor tells them what is happening, the plan
+     tells them what was supposed to. */
+  WFM: ["wfm", "floor", "rta"],
+  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster"],
+  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster"],
   /* HR owns both ends of the journey — admitting people and exiting them — so
      joining and leaving are theirs before anyone else's. */
   HRBusinessPartner: [
@@ -92,6 +94,19 @@ const PERMS = {
   punchOthers: ["SuperAdmin", "WFM", "OperationsLead", "ProjectManager"],
   // The live floor view. WFM is the primary consumer; leads see their own scope.
   floorView: ["SuperAdmin", "WFM", "OperationsLead", "ProjectManager", "HRBusinessPartner"],
+
+  /* ── Workforce management ───────────────────────────────────────────────
+     Reading the plan is deliberately wide. A lead who cannot see that 14:00 is
+     three short will keep approving leave into it, and then the plan and the
+     floor disagree for reasons nobody can see. Writing it is narrow, because a
+     forecast two people can edit is a forecast neither of them trusts. */
+  wfmRead: ["SuperAdmin", "WFM", "OperationsLead", "ProjectManager", "HRBusinessPartner"],
+  wfmWrite: ["SuperAdmin", "WFM"],
+  /* Rostering is wider than forecasting: WFM builds the schedule, but a lead
+     legitimately moves one of their own people between shifts. Which *rows*
+     they may touch is narrowed per-request by the same visibility rules the
+     directory uses. */
+  scheduleWrite: ["SuperAdmin", "WFM", "OperationsLead"],
 };
 
 export const can = (user, action) => !!user && (PERMS[action] || []).includes(user.role);

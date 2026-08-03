@@ -24,7 +24,7 @@ export const ROLE_PURPOSE = {
   HRBusinessPartner: "You own both ends of the journey — admitting people and exiting them — plus the records and identifiers in between.",
   OperationsLead: "You run the floor for your teams: attendance, approvals and the conduct cases that reach you.",
   ProjectManager: "You look after your accounts — the people on them, their attendance, and the cases you raise.",
-  WFM: "You own real-time adherence across the whole floor, and the adherence imports behind it.",
+  WFM: "You own the plan and the floor it plays out on — the demand forecast, the roster that covers it, and real-time adherence against both.",
   Agent: "Your own record: your clock, your leave, your requests and anything HR needs you to sign.",
 };
 
@@ -53,6 +53,9 @@ const ENTRIES = [
   { tab: "approvals", what: "Decide what is waiting on you, including partial approvals", where: "My approvals" },
   { tab: "log", what: "Log an attendance or conduct event against someone", where: "Log an event" },
   { tab: "rta", what: "Import the adherence report and turn it into cases", where: "Import adherence" },
+  { tab: "wfm", what: "See what the queue needs hour by hour, and whether the roster covers it", where: "Planning" },
+  { perm: "wfmWrite", section: "work", what: "Load a demand forecast and set the service target it is planned to", where: "Planning → Forecast" },
+  { perm: "scheduleWrite", section: "work", what: "Build and publish the roster — shifts, training, days off", where: "Planning → Roster" },
   { perm: "punchOthers", section: "work", what: "Clock someone in or out on their behalf when their headset dies", where: "Live floor" },
 
   // ── Growing ──

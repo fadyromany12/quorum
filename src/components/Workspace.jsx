@@ -35,6 +35,7 @@ import {
   X,
   UserPlus,
   UserMinus,
+  Gauge,
 } from "lucide-react";
 
 import { useServerData } from "../hooks/useServerData.js";
@@ -65,6 +66,7 @@ import AuditTrail from "./AuditTrail.jsx";
 import People from "./People.jsx";
 import FloorView from "./FloorView.jsx";
 import RequestInbox from "./RequestInbox.jsx";
+import WfmPlanner from "./WfmPlanner.jsx";
 import { navFor, sectionOfTab, stagesOf } from "../lib/journey.js";
 
 /* What each screen is called and what it looks like. Where it sits is decided
@@ -78,6 +80,7 @@ const TAB_META = {
   approvals: { label: "My approvals", icon: CheckCheck, badge: "approvals" },
   log: { label: "Log an event", icon: ClipboardPlus },
   rta: { label: "Import adherence", icon: UploadCloud },
+  wfm: { label: "Planning", icon: Gauge },
   triage: { label: "Case review", icon: Inbox, badge: "review" },
   agents: { label: "Scorecards", icon: Users },
   leaving: { label: "Leavers", icon: UserMinus },
@@ -249,7 +252,7 @@ export default function Workspace({ initial, me, themeIntent }) {
   // "people" is in this list for a different reason than the rest: the others
   // are admin screens, but the directory genuinely has its own data source and
   // is meaningful with an empty case ledger.
-  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests"].includes(tab);
+  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests", "wfm"].includes(tab);
 
   return (
     <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
@@ -523,6 +526,15 @@ export default function Workspace({ initial, me, themeIntent }) {
             )}
 
             {tab === "rta" && can(me, "upload") && <RtaUploader data={data} me={me} onCommit={commitRta} />}
+
+            {tab === "wfm" && (
+              <WfmPlanner
+                me={me}
+                accounts={data.accounts}
+                canWrite={can(me, "wfmWrite")}
+                canRoster={can(me, "scheduleWrite")}
+              />
+            )}
 
             {tab === "triage" && !empty && (
               <TriageGate

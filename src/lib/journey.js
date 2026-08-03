@@ -96,7 +96,7 @@ export const NAV_SECTIONS = [
     id: "work",
     label: "Working",
     phase: true,
-    tabs: ["floor", "requests", "approvals", "log", "rta"],
+    tabs: ["floor", "wfm", "requests", "approvals", "log", "rta"],
   },
   {
     id: "grow",
