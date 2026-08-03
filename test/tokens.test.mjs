@@ -70,6 +70,35 @@ ok("`petrol` is the accent token, kept from the rename", known.has("petrol"));
 ok("`signal` is deliberately not a token name — the CSS variable is", !known.has("signal"));
 ok("the accent nonetheless points at the signal variable", T.P.petrol === "var(--signal)");
 
+console.log("\n── Vendor prefixes, in the order that survives minification ──");
+/* The same failure as P.signal, one layer down. globals.css declared
+     backdrop-filter: blur(var(--glass-blur));
+     -webkit-backdrop-filter: blur(var(--glass-blur));
+   which reads as correct and is not. The minifier saw one property declared
+   twice with the same value, kept the last, and shipped the prefixed alias
+   alone — and Chromium no longer reports support for it, so the entire glass
+   system computed to `backdrop-filter: none`. The token resolved, the rule was
+   present, the build was green, and every translucent surface simply had
+   nothing blurred behind it.
+
+   Standard property last is the convention precisely because it is the one
+   that has to win. This scans for the inverted order rather than for one
+   property, so the next prefixed pair someone adds is covered too. */
+{
+  const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+  const inverted = [];
+  for (const m of css.matchAll(/^[ \t]*(?!-)([a-z-]+)\s*:[^;]+;[\s\S]{0,4}?^[ \t]*-(?:webkit|moz|ms)-\1\s*:/gm)) {
+    inverted.push(m[1]);
+  }
+  ok("no standard property is declared before its own vendor prefix",
+    inverted.length === 0,
+    inverted.length ? `${inverted.join(", ")} — the prefixed copy is last, so minification keeps that one` : "");
+  /* And the property this was found on is still there in both forms. */
+  ok("the glass blur declares both the prefixed and the standard property",
+    /-webkit-backdrop-filter:\s*blur\(var\(--glass-blur\)\)/.test(css) &&
+    /(?<!-)backdrop-filter:\s*blur\(var\(--glass-blur\)\)/.test(css));
+}
+
 console.log("\n── alpha() ──");
 ok("alpha wraps a CSS variable in colour-mix rather than mangling it",
   /color-mix/.test(T.alpha("var(--signal)", 0.5)));

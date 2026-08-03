@@ -327,9 +327,22 @@ body::before {
    The workspace styles itself inline from lib/tokens.js; these classes add
    what inline styles can't: backdrop blur, keyframe entrances, hover lifts. */
 
+/* Prefixed first, standard last — the order is load-bearing, not a style
+   preference. Written the other way round, the minifier saw two declarations
+   of the same property with the same value, kept the last one, and shipped
+   `-webkit-backdrop-filter` alone. Chromium no longer reports support for the
+   prefixed alias, so the whole glass system computed to `backdrop-filter:
+   none`: every translucent surface stayed translucent with nothing behind it
+   blurred, and the sticky header showed the sidebar scrolling through it at
+   full legibility.
+
+   Nothing failed. The token resolved, the rule was in the stylesheet, and the
+   build was green — the declaration simply was not the one that survived
+   minification. Standard-last means whichever one the minifier keeps is the
+   one that works. */
 .ao-glass {
-  backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--elev-2);
 }
 
