@@ -20,6 +20,7 @@ import {
   GraduationCap, Headphones, PauseCircle, Wrench, ClipboardList, LogOut,
 } from "lucide-react";
 import { Card, Pill, Muted, BtnGhost } from "./ui/index.jsx";
+import { useLabels } from "../hooks/useLocale.jsx";
 import { P } from "../lib/tokens.js";
 import { plural } from "../lib/format.js";
 import { AUX_CODES } from "../lib/attendance.js";
@@ -50,6 +51,7 @@ const mmss = (s) => {
 };
 
 function AgentTile({ agent, serverNow }) {
+  const { labelFor } = useLabels();
   const s = agent.state || {};
   const meta = AUX_META[s.aux] || { icon: Headphones, color: P.sub };
   const Icon = s.loggedIn ? meta.icon : LogOut;
@@ -80,7 +82,7 @@ function AgentTile({ agent, serverNow }) {
 
       <div className="flex items-baseline gap-2">
         <span style={{ fontSize: 12.5, color: tone, fontWeight: 500 }}>
-          {s.loggedIn ? AUX_CODES[s.aux]?.label || s.aux : "Logged out"}
+          {s.loggedIn ? labelFor(AUX_CODES, s.aux) : "Logged out"}
         </span>
         {s.loggedIn && (
           <span className="ao-mono" style={{ fontSize: 12, color: over ? P.brick : P.sub }}>
@@ -101,8 +103,8 @@ function AgentTile({ agent, serverNow }) {
           {agent.breaches.slice(0, 2).map((b, i) => (
             <Pill key={i} color={P.brick}>
               {b.kind === "over_limit"
-                ? `${AUX_CODES[b.aux]?.label || b.aux} +${Math.round(b.overBy / 60)}m`
-                : `${b.count}× ${AUX_CODES[b.aux]?.label || b.aux}`}
+                ? `${labelFor(AUX_CODES, b.aux)} +${Math.round(b.overBy / 60)}m`
+                : `${b.count}× ${labelFor(AUX_CODES, b.aux)}`}
             </Pill>
           ))}
         </div>

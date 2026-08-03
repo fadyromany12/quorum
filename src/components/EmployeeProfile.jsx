@@ -21,6 +21,7 @@ import { Card, Pill, Muted, BtnGhost, BtnPrimary, TInput, TSelect, Field } from 
 import { P } from "../lib/tokens.js";
 import { fmtStamp, plural } from "../lib/format.js";
 import { todayStr } from "../lib/dates.js";
+import { useLabels } from "../hooks/useLocale.jsx";
 import {
   displayName, completedYears, nextStages, probationDue, isHeadcount, canTransition,
 } from "../lib/employee.js";
@@ -160,6 +161,7 @@ function SensitivePanel({ employeeId }) {
 }
 
 export default function EmployeeProfile({ employeeId, onBack, onChanged, nameById = {} }) {
+  const { labelFor } = useLabels();
   const [employee, setEmployee] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [error, setError] = useState("");
@@ -326,7 +328,7 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
         {employee.exitReason && (
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1" style={{ fontSize: 12.5, color: P.inkSoft }}>
             <span style={{ color: P.sub }}>Exit reason:</span>
-            <span>{EXIT_REASONS[employee.exitReason]?.label ?? employee.exitReason}</span>
+            <span>{labelFor(EXIT_REASONS, employee.exitReason)}</span>
             {EXIT_REASONS[employee.exitReason] && (
               <>
                 <Pill color={isVoluntaryExit(employee.exitReason) ? P.petrol : P.amber}>
@@ -475,6 +477,7 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
    the API as well — this form exists so the refusal is never the first thing
    the user learns about the requirement. */
 function ExitPanel({ employee, onDone }) {
+  const { labelFor } = useLabels();
   const [exitType, setExitType] = useState("Resignation");
   const [lastDay, setLastDay] = useState("");
   const [reason, setReason] = useState("");
@@ -549,7 +552,7 @@ function ExitPanel({ employee, onDone }) {
           >
             <option value="">Select a reason…</option>
             {reasons.map((c) => (
-              <option key={c} value={c}>{EXIT_REASONS[c].label}</option>
+              <option key={c} value={c}>{labelFor(EXIT_REASONS, c)}</option>
             ))}
           </select>
         </label>
@@ -618,6 +621,7 @@ function ExitPanel({ employee, onDone }) {
    today" is the question the screen exists to answer — the course list is the
    evidence for it, not the point of it. */
 function TrainingPanel({ employeeId, onChanged }) {
+  const { labelFor } = useLabels();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -735,7 +739,7 @@ function TrainingPanel({ employeeId, onChanged }) {
             style={{ fontSize: 12, padding: "6px 10px", borderRadius: 9, border: `1px solid ${P.line}`, background: P.card, color: P.inkSoft }}
           >
             <option value="">Add a course…</option>
-            {addable.map((t) => <option key={t} value={t}>{TRAINING_TYPES[t].label}</option>)}
+            {addable.map((t) => <option key={t} value={t}>{labelFor(TRAINING_TYPES, t)}</option>)}
           </select>
           <BtnGhost onClick={() => record(adding, "planned")} disabled={busy || !adding}>Plan</BtnGhost>
           <BtnGhost onClick={() => record(adding, "completed")} disabled={busy || !adding}>Record as done</BtnGhost>

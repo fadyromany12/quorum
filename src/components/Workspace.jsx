@@ -72,33 +72,35 @@ import WfmPlanner from "./WfmPlanner.jsx";
 import Insights from "./Insights.jsx";
 import HelpDesk from "./HelpDesk.jsx";
 import { navFor, sectionOfTab, stagesOf } from "../lib/journey.js";
+import { labelOf, dirFor } from "../lib/i18n.js";
+import { LocaleProvider } from "../hooks/useLocale.jsx";
 
 /* What each screen is called and what it looks like. Where it sits is decided
    by journey.js — this map is only the label and the icon, so renaming a screen
    is one edit and moving it is another, independently. */
 const TAB_META = {
-  dashboard: { label: "Overview", icon: LayoutDashboard },
-  joining: { label: "New joiners", icon: UserPlus },
-  floor: { label: "Live floor", icon: MonitorPlay },
-  requests: { label: "Requests", icon: Scale },
-  approvals: { label: "My approvals", icon: CheckCheck, badge: "approvals" },
-  log: { label: "Log an event", icon: ClipboardPlus },
-  rta: { label: "Import adherence", icon: UploadCloud },
-  wfm: { label: "Planning", icon: Gauge },
-  triage: { label: "Case review", icon: Inbox, badge: "review" },
-  agents: { label: "Scorecards", icon: Users },
-  leaving: { label: "Leavers", icon: UserMinus },
-  people: { label: "Directory", icon: IdCard },
-  roster: { label: "All employees", icon: Table2 },
-  insights: { label: "Insights", icon: TrendingUp },
-  audit: { label: "Audit trail", icon: ScrollText },
-  helpdesk: { label: "Help desk", icon: KeyRound },
-  matrix: { label: "Discipline matrix", icon: Table2 },
-  users: { label: "Accounts", icon: UserCog },
-  settings: { label: "Settings", icon: Settings2 },
+  dashboard: { label: "Overview", labelAr: "نظرة عامة", icon: LayoutDashboard },
+  joining: { label: "New joiners", labelAr: "الملتحقون الجدد", icon: UserPlus },
+  floor: { label: "Live floor", labelAr: "الأرضية المباشرة", icon: MonitorPlay },
+  requests: { label: "Requests", labelAr: "الطلبات", icon: Scale },
+  approvals: { label: "My approvals", labelAr: "موافقاتي", icon: CheckCheck, badge: "approvals" },
+  log: { label: "Log an event", labelAr: "تسجيل واقعة", icon: ClipboardPlus },
+  rta: { label: "Import adherence", labelAr: "استيراد الالتزام", icon: UploadCloud },
+  wfm: { label: "Planning", labelAr: "التخطيط", icon: Gauge },
+  triage: { label: "Case review", labelAr: "مراجعة الحالات", icon: Inbox, badge: "review" },
+  agents: { label: "Scorecards", labelAr: "بطاقات الأداء", icon: Users },
+  leaving: { label: "Leavers", labelAr: "المغادرون", icon: UserMinus },
+  people: { label: "Directory", labelAr: "الدليل", icon: IdCard },
+  roster: { label: "All employees", labelAr: "كل الموظفين", icon: Table2 },
+  insights: { label: "Insights", labelAr: "التحليلات", icon: TrendingUp },
+  audit: { label: "Audit trail", labelAr: "سجل التدقيق", icon: ScrollText },
+  helpdesk: { label: "Help desk", labelAr: "الدعم الفني", icon: KeyRound },
+  matrix: { label: "Discipline matrix", labelAr: "مصفوفة الجزاءات", icon: Table2 },
+  users: { label: "Accounts", labelAr: "الحسابات", icon: UserCog },
+  settings: { label: "Settings", labelAr: "الإعدادات", icon: Settings2 },
 };
 
-export default function Workspace({ initial, me, themeIntent }) {
+export default function Workspace({ initial, me, themeIntent, locale = "en" }) {
   const {
     data,
     error,
@@ -261,7 +263,11 @@ export default function Workspace({ initial, me, themeIntent }) {
   const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests", "wfm", "insights", "helpdesk"].includes(tab);
 
   return (
-    <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
+    <LocaleProvider locale={locale}>
+    {/* dir on the shell rather than on <html>: the workspace is one client
+        subtree and the login and portal set their own, so scoping it here keeps
+        each surface honest about its own direction. */}
+    <div dir={dirFor(locale)} className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
       {/* ── Header band — sticky glass over the aurora ── */}
       <header
         className="ao-glass"
@@ -346,10 +352,10 @@ export default function Workspace({ initial, me, themeIntent }) {
                   className="ao-disp uppercase tracking-wide"
                   style={{ fontSize: 9.5, color: P.sub, letterSpacing: 0.9, padding: "0 12px 2px", opacity: 0.75 }}
                 >
-                  {s.label}
+                  {labelOf(s, locale)}
                 </div>
                 {s.items.map((n) => (
-                  <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
+                  <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} locale={locale} />
                 ))}
               </div>
             ))}
@@ -374,7 +380,7 @@ export default function Workspace({ initial, me, themeIntent }) {
           {/* Mobile nav */}
           <div className="md:hidden flex gap-2 overflow-x-auto mt-4 pb-1">
             {nav.flatMap((s) => s.items).map((n) => (
-              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
+              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} locale={locale} />
             ))}
           </div>
 
@@ -703,6 +709,7 @@ export default function Workspace({ initial, me, themeIntent }) {
       )}
 
     </div>
+    </LocaleProvider>
   );
 }
 
@@ -732,7 +739,7 @@ function UserChip({ me, onLogout }) {
   );
 }
 
-function NavItem({ item, active, badge, onClick }) {
+function NavItem({ item, active, badge, onClick, locale = "en" }) {
   const Icon = item.icon;
   return (
     <button
@@ -745,7 +752,7 @@ function NavItem({ item, active, badge, onClick }) {
         padding: "9px 12px",
         borderRadius: 8,
         cursor: "pointer",
-        textAlign: "left",
+        textAlign: "start",
         width: "100%",
         border: "1px solid transparent",
         background: "transparent",
@@ -781,7 +788,7 @@ function NavItem({ item, active, badge, onClick }) {
         className="flex-1 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
         style={{ position: "relative", zIndex: 1 }}
       >
-        {item.label}
+        {labelOf(item, locale)}
       </span>
       {badge > 0 && (
         <span
@@ -795,7 +802,7 @@ function NavItem({ item, active, badge, onClick }) {
   );
 }
 
-function NavChip({ item, active, badge, onClick }) {
+function NavChip({ item, active, badge, onClick, locale = "en" }) {
   const Icon = item.icon;
   return (
     <button
@@ -813,7 +820,7 @@ function NavChip({ item, active, badge, onClick }) {
       }}
     >
       <Icon size={12} />
-      {item.label}
+      {labelOf(item, locale)}
       {badge > 0 && (
         <span className="ao-mono" style={{ fontSize: 10, background: active ? "#fff" : P.brick, color: active ? P.petrol : "#fff", borderRadius: 999, padding: "0 5px" }}>
           {badge}

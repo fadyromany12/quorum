@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { loadEntries } from "@/lib/db";
 import { publicUser } from "@/lib/users-public";
 import Workspace from "@/components/Workspace.jsx";
+import { getLocale } from "@/lib/locale";
 import { getThemeIntent } from "@/lib/theme-server";
 import { visibilityScope } from "@/lib/employee-db";
 import { accountNames, normaliseAccounts } from "@/lib/org.js";
@@ -63,5 +64,8 @@ export default async function WorkspacePage() {
 
   const themeIntent = await getThemeIntent();
 
-  return <Workspace initial={initial} me={me} themeIntent={themeIntent} />;
+  /* The workspace was the one surface that never received the locale, so the
+     139 Arabic labels in the taxonomies had no way to reach it. */
+  const locale = await getLocale();
+  return <Workspace initial={initial} me={me} themeIntent={themeIntent} locale={locale} />;
 }

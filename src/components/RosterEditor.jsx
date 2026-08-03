@@ -27,6 +27,7 @@ import { P, alpha } from "../lib/tokens.js";
 import { SCHEDULE_ACTIVITIES, ACTIVITY_LIST, checkEntry } from "../lib/schedule.js";
 import { SectionTitle, Muted, BtnGhost, BtnPrimary, TSelect } from "./ui/index.jsx";
 import Tip from "./ui/Tip.jsx";
+import { useLabels } from "../hooks/useLocale.jsx";
 
 /** The row as it exists before anyone has touched it. */
 const EMPTY = { activity: "", patternId: "", startTime: "", durationMinutes: 0, published: false, id: null };
@@ -34,6 +35,7 @@ const EMPTY = { activity: "", patternId: "", startTime: "", durationMinutes: 0, 
 const hours = (m) => `${Math.round((m / 60) * 10) / 10}h`;
 
 export default function RosterEditor({ account, lob, date, onSaved }) {
+  const { labelFor } = useLabels();
   const [people, setPeople] = useState([]);
   const [patterns, setPatterns] = useState([]);
   const [existing, setExisting] = useState({});   // employeeId -> stored row
@@ -247,7 +249,7 @@ export default function RosterEditor({ account, lob, date, onSaved }) {
                     >
                       <option value="">Not set</option>
                       {ACTIVITY_LIST.map((a) => (
-                        <option key={a} value={a}>{SCHEDULE_ACTIVITIES[a].label}</option>
+                        <option key={a} value={a}>{labelFor(SCHEDULE_ACTIVITIES, a)}</option>
                       ))}
                     </TSelect>
                   </td>

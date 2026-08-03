@@ -80,10 +80,15 @@ export const stagesOf = (id) => phase(id)?.stages ?? [];
    only where they sit and what they are called. Renaming a screen is an edit
    here, not a hunt through JSX. */
 
-export const NAV_SECTIONS = [
+/* Only the non-phase sections carry their own labels. A section marked
+   `phase: true` takes its wording from JOURNEY below, because a heading and the
+   phase it names must be the same words in both languages — and writing them
+   twice is how they stop being. */
+const SECTIONS = [
   {
     id: "overview",
     label: "Overview",
+    labelAr: "نظرة عامة",
     tabs: ["dashboard"],
   },
   {
@@ -113,14 +118,23 @@ export const NAV_SECTIONS = [
   {
     id: "records",
     label: "Records",
+    labelAr: "السجلات",
     tabs: ["people", "roster", "insights", "audit"],
   },
   {
     id: "setup",
     label: "Set up",
+    labelAr: "الإعداد",
     tabs: ["helpdesk", "matrix", "users", "settings"],
   },
 ];
+
+/** Phase sections resolve their label and Arabic from the journey itself. */
+export const NAV_SECTIONS = SECTIONS.map((s) => {
+  if (!s.phase) return s;
+  const p = phase(s.id);
+  return p ? { ...s, label: p.label, labelAr: p.labelAr } : s;
+});
 
 /** Every tab id the navigation places, in display order. */
 export const NAV_ORDER = NAV_SECTIONS.flatMap((s) => s.tabs);
