@@ -1,43 +1,47 @@
-/* The Quorum mark — a ring of eight seats, six present (filled, violet
-   gradient), two absent (hollow), with the ring's tail kicking out to form
-   the Q. The icon is the product: enough present to proceed.
+/* The Konecta One mark — four arcs closing a single ring, around one filled
+   centre.
+
+   The arcs are the four phases the whole product is organised around: joining,
+   working, growing, leaving. They are drawn as separate strokes because they
+   are separate stages of employment, and they close one continuous circle
+   because the point of the product is that they describe one person on one
+   record. The dot at the middle is that record.
+
+   It replaces the ring of eight seats, which meant "enough present to proceed"
+   and made a Q out of its own tail. Good mark, wrong name — with no Q to form,
+   the tail was decoration, and eight seats said something about coverage rather
+   than about the journey the app is now built around.
 
    Pure SVG, no assets. Used by the login screen, the workspace header and
    the agent portal; app/icon.svg mirrors it for the favicon. */
 
 import { BRAND } from "@/lib/brand";
 
-const NODES = [
-  { x: 16, y: 6, present: true },
-  { x: 23.07, y: 8.93, present: false }, // the two absent seats sit NE/E —
-  { x: 26, y: 16, present: false }, //      the gap the quorum still survives
-  { x: 23.07, y: 23.07, present: true },
-  { x: 16, y: 26, present: true },
-  { x: 8.93, y: 23.07, present: true },
-  { x: 6, y: 16, present: true },
-  { x: 8.93, y: 8.93, present: true },
+/* Each arc spans 76° with a 14° gap after it, four times around a circle of
+   radius 10 centred at (16,16). The endpoints are precomputed rather than
+   derived at render: they never change, and running trigonometry on every
+   header paint to arrive at four constants is work nobody asked for. */
+const ARCS = [
+  "M 16 6 A 10 10 0 0 1 25.703 13.581", // joining — from the top, clockwise
+  "M 26 16 A 10 10 0 0 1 18.419 25.703", // working
+  "M 16 26 A 10 10 0 0 1 6.297 18.419", // growing
+  "M 6 16 A 10 10 0 0 1 13.581 6.297", // leaving — closing back to the top
 ];
 
-export function QuorumMark({ size = 30 }: { size?: number }) {
+export function OneMark({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 34 34" fill="none" aria-hidden="true">
       <defs>
-        <linearGradient id="q-node" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="one-arc" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="var(--deep-accent)" />
           <stop offset="100%" stopColor="#6D28D9" />
         </linearGradient>
       </defs>
-      {/* hairline ring */}
-      <circle cx="16" cy="16" r="10" stroke="var(--logo-ring)" strokeWidth="1" />
-      {/* the Q's tail — through the SE seat, outward */}
-      <line x1="23.07" y1="23.07" x2="29.5" y2="29.5" stroke={BRAND.signal} strokeWidth="2.4" strokeLinecap="round" />
-      {NODES.map((n, i) =>
-        n.present ? (
-          <circle key={i} cx={n.x} cy={n.y} r="2.15" fill="url(#q-node)" />
-        ) : (
-          <circle key={i} cx={n.x} cy={n.y} r="1.65" stroke="var(--logo-seat)" strokeWidth="1.1" fill="none" />
-        )
-      )}
+      {ARCS.map((d, i) => (
+        <path key={i} d={d} stroke="url(#one-arc)" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+      ))}
+      {/* The record at the centre — one, whatever phase is running around it. */}
+      <circle cx="16" cy="16" r="3.2" fill={BRAND.signal} />
     </svg>
   );
 }
@@ -57,7 +61,7 @@ export default function Logo({
         className="grid shrink-0 place-items-center"
         style={glow ? { filter: `drop-shadow(0 0 10px ${BRAND.signalSoft})` } : undefined}
       >
-        <QuorumMark size={size} />
+        <OneMark size={size} />
       </span>
       <span className="min-w-0">
         <span

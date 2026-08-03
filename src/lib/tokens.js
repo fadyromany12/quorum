@@ -1,4 +1,4 @@
-/* Design tokens — Quorum's "Ink & Signal" palette.
+/* Design tokens — the "Ink & Signal" palette.
 
    Every value here resolves to a CSS custom property defined in
    app/globals.css, so the ~376 inline style reads across the workspace
@@ -27,7 +27,7 @@ export const P = {
   inkSoft: "var(--ink-soft)", // secondary
   sub: "var(--sub)", // muted / labels
 
-  // The Signal — Quorum violet. Primary actions, active nav, pending states.
+  // The Signal — the one accent. Primary actions, active nav, pending states.
   petrol: "var(--signal)", // (name kept for compatibility: ~40 call sites read P.petrol)
 
   // Semantic accents

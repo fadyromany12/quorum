@@ -1,3 +1,4 @@
+import { BRAND } from "./brand";
 /* Email notifications — fail-open by design.
 
    Every send is best-effort: a mail provider outage must never fail the
@@ -5,7 +6,7 @@
    the module logs and reports {skipped: true}, which is also what makes local
    and CI runs quiet. Set the key and it simply starts sending. */
 
-const FROM = process.env.MAIL_FROM || "Quorum <onboarding@resend.dev>";
+const FROM = process.env.MAIL_FROM || `${BRAND.name} <onboarding@resend.dev>`;
 
 export async function sendEmail(to: string, subject: string, html: string) {
   const key = process.env.RESEND_API_KEY;
@@ -39,6 +40,6 @@ export function simpleHtml(title: string, lines: string[], cta?: { label: string
     <h2 style="margin:0 0 12px">${esc(title)}</h2>
     ${lines.map((l) => `<p style="margin:6px 0;color:#444">${esc(l)}</p>`).join("")}
     ${cta ? `<p style="margin:18px 0"><a href="${esc(cta.url)}" style="background:#4F46E5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">${esc(cta.label)}</a></p>` : ""}
-    <p style="font-size:12px;color:#999;margin-top:22px">Quorum — this is a notification, not a record. The record is in the app.</p>
+    <p style="font-size:12px;color:#999;margin-top:22px">${BRAND.name} — this is a notification, not a record. The record is in the app.</p>
   </div>`;
 }

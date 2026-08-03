@@ -1,7 +1,7 @@
 /* Theme selection: dark, light, or follow the OS.
 
    "system" is stored as an intent, not a value — it resolves at paint time so
-   a user who flips their OS appearance sees Quorum follow without touching a
+   a user who flips their OS appearance sees the app follow without touching a
    setting. globals.css does the actual work; all this decides is which
    data-theme lands on <html>. */
 

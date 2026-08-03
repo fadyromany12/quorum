@@ -197,5 +197,9 @@ export const guideTitle = (role) => `What you can do as ${ROLE_LABEL[role] ?? ro
 /** Bumped when the guide changes enough that people should see it again. A
     dismissal is remembered per version, so a genuinely new capability can
     re-open it once without nagging on every release. */
-export const GUIDE_VERSION = 1;
-export const guideKey = (role) => `quorum.guide.${role}.v${GUIDE_VERSION}`;
+export const GUIDE_VERSION = 2;
+/* The namespace is written out rather than read from BRAND, because this module
+   is imported directly by the node test runner, which cannot parse the .ts the
+   brand lives in. A rename here is a one-line edit that a grep for the old name
+   will find. */
+export const guideKey = (role) => `konecta-one.guide.${role}.v${GUIDE_VERSION}`;

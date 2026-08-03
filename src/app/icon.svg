@@ -6,14 +6,11 @@
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="14" fill="#05070C"/>
-  <circle cx="30" cy="30" r="17" stroke="rgba(255,255,255,0.22)" stroke-width="1.6" fill="none"/>
-  <line x1="42.02" y1="42.02" x2="53" y2="53" stroke="#8B5CF6" stroke-width="4.2" stroke-linecap="round"/>
-  <circle cx="30" cy="13" r="3.6" fill="url(#n)"/>
-  <circle cx="42.02" cy="17.98" r="2.8" stroke="rgba(255,255,255,0.35)" stroke-width="1.8" fill="none"/>
-  <circle cx="47" cy="30" r="2.8" stroke="rgba(255,255,255,0.35)" stroke-width="1.8" fill="none"/>
-  <circle cx="42.02" cy="42.02" r="3.6" fill="url(#n)"/>
-  <circle cx="30" cy="47" r="3.6" fill="url(#n)"/>
-  <circle cx="17.98" cy="42.02" r="3.6" fill="url(#n)"/>
-  <circle cx="13" cy="30" r="3.6" fill="url(#n)"/>
-  <circle cx="17.98" cy="17.98" r="3.6" fill="url(#n)"/>
+  <g stroke="url(#n)" stroke-width="4.6" stroke-linecap="round" fill="none">
+    <path d="M 32 12 A 20 20 0 0 1 51.406 27.162"/>
+    <path d="M 52 32 A 20 20 0 0 1 36.838 51.406"/>
+    <path d="M 32 52 A 20 20 0 0 1 12.594 36.838"/>
+    <path d="M 12 32 A 20 20 0 0 1 27.162 12.594"/>
+  </g>
+  <circle cx="32" cy="32" r="6.4" fill="#8B5CF6"/>
 </svg>
