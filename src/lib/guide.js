@@ -25,6 +25,7 @@ export const ROLE_PURPOSE = {
   OperationsLead: "You run the floor for your teams: attendance, approvals and the conduct cases that reach you.",
   ProjectManager: "You look after your accounts — the people on them, their attendance, and the cases you raise.",
   WFM: "You own the plan and the floor it plays out on — the demand forecast, the roster that covers it, and real-time adherence against both.",
+  ITSupport: "Account recovery, and only that: you can issue a one-time code that lets someone set a new password themselves. You never see or set the password, and you cannot reach anyone's record.",
   Agent: "Your own record: your clock, your leave, your requests and anything HR needs you to sign.",
 };
 
@@ -76,6 +77,8 @@ const ENTRIES = [
   { tab: "matrix", what: "Change the discipline matrix — the rules every verdict comes from", where: "Discipline matrix" },
   { tab: "users", what: "Create logins, set roles and reset passwords", where: "Accounts" },
   { tab: "settings", what: "Manage accounts, their lines of business, and team leads", where: "Settings" },
+  { perm: "issueReset", section: "setup", what: "Issue a one-time code so someone locked out can set a new password themselves", where: "Help desk" },
+  { perm: "revokeReset", section: "setup", what: "Kill a live code immediately if someone reports one they did not ask for", where: "Help desk" },
 
   // ── Agents ──
   { role: "Agent", section: "portal", what: "Clock in and out, and change your state through the day", where: "Your portal" },

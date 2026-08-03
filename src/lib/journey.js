@@ -118,7 +118,7 @@ export const NAV_SECTIONS = [
   {
     id: "setup",
     label: "Set up",
-    tabs: ["matrix", "users", "settings"],
+    tabs: ["helpdesk", "matrix", "users", "settings"],
   },
 ];
 

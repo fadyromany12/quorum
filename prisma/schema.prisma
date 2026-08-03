@@ -15,12 +15,17 @@ datasource db {
   provider = "postgresql"
 }
 
+// Mirrors ROLES in src/lib/auth.js. The two must agree: auth.js decides what a
+// role may do, this decides whether the row can exist at all, and a role in one
+// but not the other is a login that cannot be created or a permission map with
+// a dead entry.
 enum Role {
   SuperAdmin
   HRBusinessPartner
   OperationsLead
   ProjectManager
   WFM
+  ITSupport
   Agent
 }
 
@@ -89,11 +94,12 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  auditLogs AuditLog[]
+  auditLogs      AuditLog[]
   // The employment record behind this login, once one exists. Optional in both
   // directions: applicants have no login, and service accounts have no
   // employment record.
-  employee  Employee?
+  employee       Employee?
+  passwordResets PasswordReset[]
 }
 
 model Case {
@@ -720,6 +726,48 @@ model AppConfig {
   // will grow (brackets, employer share, allowances) and each addition should
   // not be a migration on a table with one row.
   payroll Json?
+}
+
+// ─── Password reset ──────────────────────────────────────────────────────────
+//
+// One row per request, never per code: the code itself is stored only as a
+// hash, so reading this table hands over no live resets. Rows are kept after
+// use rather than deleted — "who asked for a reset, when, and did they redeem
+// it" is exactly the history an account-takeover investigation needs, and a
+// table that tidies itself up cannot answer it.
+model PasswordReset {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // sha256 of the normalised code. Not bcrypt: the code is high-entropy and
+  // single-use with a 20-minute life, so the work factor buys nothing and the
+  // redeem path would be slow enough to be a denial-of-service lever.
+  codeHash String
+
+  // email | itIssued. How the code reached the person, recorded because an
+  // investigation later needs to know which path was used, not just that one was.
+  delivery String @default("itIssued")
+
+  createdAt     DateTime  @default(now())
+  usedAt        DateTime?
+  revokedAt     DateTime?
+  // Why it was revoked: signin | newRequest | admin. A code invalidated because
+  // the person simply signed in is a very different event from one an admin
+  // killed, and both are worth telling apart afterwards.
+  revokedReason String    @default("")
+
+  attempts Int @default(0)
+
+  // Who issued it, when IT did. Empty for a self-serve email request — and that
+  // emptiness is itself the record that nobody was involved.
+  issuedByName String @default("")
+  issuedByRole String @default("")
+
+  requestedIp String @default("")
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 // Login throttle state, shared across serverless instances. One row per failed

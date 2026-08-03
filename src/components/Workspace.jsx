@@ -37,6 +37,7 @@ import {
   UserMinus,
   Gauge,
   TrendingUp,
+  KeyRound,
 } from "lucide-react";
 
 import { useServerData } from "../hooks/useServerData.js";
@@ -69,6 +70,7 @@ import FloorView from "./FloorView.jsx";
 import RequestInbox from "./RequestInbox.jsx";
 import WfmPlanner from "./WfmPlanner.jsx";
 import Insights from "./Insights.jsx";
+import HelpDesk from "./HelpDesk.jsx";
 import { navFor, sectionOfTab, stagesOf } from "../lib/journey.js";
 
 /* What each screen is called and what it looks like. Where it sits is decided
@@ -90,6 +92,7 @@ const TAB_META = {
   roster: { label: "All employees", icon: Table2 },
   insights: { label: "Insights", icon: TrendingUp },
   audit: { label: "Audit trail", icon: ScrollText },
+  helpdesk: { label: "Help desk", icon: KeyRound },
   matrix: { label: "Discipline matrix", icon: Table2 },
   users: { label: "Accounts", icon: UserCog },
   settings: { label: "Settings", icon: Settings2 },
@@ -255,7 +258,7 @@ export default function Workspace({ initial, me, themeIntent }) {
   // "people" is in this list for a different reason than the rest: the others
   // are admin screens, but the directory genuinely has its own data source and
   // is meaningful with an empty case ledger.
-  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests", "wfm", "insights"].includes(tab);
+  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests", "wfm", "insights", "helpdesk"].includes(tab);
 
   return (
     <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
@@ -375,8 +378,12 @@ export default function Workspace({ initial, me, themeIntent }) {
             ))}
           </div>
 
-          {/* KPI scorecard — noise for WFM, whose whole job here is the upload */}
-          {me.role !== "WFM" && (
+          {/* The journey strip belongs to whoever works the journey. Gated on
+              holding the overview screen rather than on naming roles: the old
+              `role !== "WFM"` check meant every role added later inherited a
+              headcount and open-case count by default, and IT — an
+              account-recovery desk — was shown both. */}
+          {allowedTabs.includes("dashboard") && (
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mt-4">
               {/* Where people are in the journey, first — the strip sits above
                   every screen, so it sets what the product appears to be about.
@@ -531,6 +538,8 @@ export default function Workspace({ initial, me, themeIntent }) {
             {tab === "rta" && can(me, "upload") && <RtaUploader data={data} me={me} onCommit={commitRta} />}
 
             {tab === "insights" && <Insights accounts={data.accounts} />}
+
+            {tab === "helpdesk" && can(me, "issueReset") && <HelpDesk canRevoke={can(me, "revokeReset")} />}
 
             {tab === "wfm" && (
               <WfmPlanner

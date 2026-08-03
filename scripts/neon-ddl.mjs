@@ -118,6 +118,37 @@ function expectedColumns(sql) {
   return out;
 }
 
+/* Enum values have exactly the blind spot columns do, and for the same reason:
+   a new value appears inside a CREATE TYPE that is skipped because the type
+   already exists. Adding a role to the schema without reconciling this produces
+   a database that cannot store it — which I hit adding ITSupport, where the
+   insert failed and the sign-in failed for a reason pointing nowhere near the
+   cause. */
+function expectedEnums(sql) {
+  const out = new Map();
+  const re = /CREATE TYPE\s+"?(?:public"?\.)?"([^"]+)"\s+AS ENUM\s*\(([^)]*)\)/g;
+  let m;
+  while ((m = re.exec(sql))) out.set(m[1], [...m[2].matchAll(/'([^']+)'/g)].map((x) => x[1]));
+  return out;
+}
+
+let addedValues = 0;
+for (const [type, values] of expectedEnums(readFileSync(file, "utf8"))) {
+  const have = new Set(
+    (await q(`select e.enumlabel from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = $1`, [type]))
+      .map((r) => r.enumlabel)
+  );
+  if (have.size === 0) continue; // just created above, already complete
+  for (const v of values) {
+    if (have.has(v)) continue;
+    /* ADD VALUE cannot run inside a transaction block, which is why this is a
+       bare statement rather than part of the batch above. */
+    await pool.query(`ALTER TYPE "${type}" ADD VALUE IF NOT EXISTS '${v.replace(/'/g, "''")}'`);
+    console.log(`  + ${type}.${v}`);
+    addedValues++;
+  }
+}
+
 const expected = expectedColumns(readFileSync(file, "utf8"));
 const newTables = (await tablesNow()).filter((t) => !before.includes(t));
 
@@ -140,7 +171,7 @@ for (const [table, cols] of expected) {
     addedColumns++;
   }
 }
-console.log(`After: ${(await tablesNow()).length} tables (+${newTables.length}: ${newTables.join(", ") || "none"}), ${addedColumns} column(s) added to existing tables.`);
+console.log(`After: ${(await tablesNow()).length} tables (+${newTables.length}: ${newTables.join(", ") || "none"}), ${addedColumns} column(s) and ${addedValues} enum value(s) added to existing types.`);
 
 /* Verification over the whole schema, not a list I maintain by hand. */
 let missing = 0;

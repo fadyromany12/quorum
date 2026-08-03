@@ -81,6 +81,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
         await clearLoginFailures(email);
+        /* A successful sign-in kills any live recovery code. If someone signs
+           in normally after a code was issued, either they never needed it or
+           it was not theirs — and in the second case the code must stop working
+           without anybody having to notice and act. */
+        await prisma.passwordReset.updateMany({
+          where: { userId: user.id, usedAt: null, revokedAt: null },
+          data: { revokedAt: new Date(), revokedReason: "signin" },
+        });
+
         await auditLogin("LOGIN_SUCCEEDED", email, { actorId: user.id, role: user.role });
         return {
           id: user.id,

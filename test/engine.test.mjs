@@ -1,4 +1,6 @@
 /* Exercising the rules engine against the spec's stated behaviours. */
+import { readFileSync } from "node:fs";
+
 const LIB = "../src/lib";
 const { verdictFor, occurrenceFor, emergencyUsage, computeEscalations, countsForDiscipline, statusOf, slaFor } = await import(`${LIB}/engine.js`);
 const { applyLaborLawCap, settleDeductions, deductionDaysOf } = await import(`${LIB}/deductions.js`);
@@ -216,7 +218,7 @@ console.log("\n── Escalation flags ──");
 const { agentMatches, agentKeyOf } = await import(`${LIB}/identity.js`);
 const { applyCompensation } = await import(`${LIB}/compensation.js`);
 const { parseCsv, parseDur, parseRtaDate, mapHeaders, assessRta, buildEntries, TEMPLATE_CSV } = await import(`${LIB}/rta.js`);
-const { can, TABS_FOR, ROLES, DEFAULT_PASSWORD, passwordProblem } = await import(`${LIB}/auth.js`);
+const { can, TABS_FOR, ROLES, ROLE_LABEL, DEFAULT_PASSWORD, passwordProblem } = await import(`${LIB}/auth.js`);
 const { FLEET_WIDE_ROLES } = await import(`${LIB}/employee.js`);
 const bcrypt = (await import("bcryptjs")).default;
 
@@ -327,7 +329,32 @@ eq("escaped quote survives", parseCsv('a,"say ""hi""",c')[0], ["a", 'say "hi"', 
 
 console.log("\n── RBAC + password hashing ──");
 {
-  eq("six roles incl. Agent", [ROLES.length, ROLES.includes("Agent")], [6, true]);
+  eq("seven roles incl. Agent and IT", [ROLES.length, ROLES.includes("Agent"), ROLES.includes("ITSupport")], [7, true, true]);
+  /* IT exists to unlock people and nothing else. The assertion is the whole
+     list rather than a length, because the failure worth catching is a
+     permission quietly arriving on the widest-hours team in the building. */
+  eq("IT can start and stop a recovery",
+    [can({ role: "ITSupport" }, "issueReset"), can({ role: "ITSupport" }, "revokeReset")], [true, true]);
+  eq("and can reach nothing else",
+    ["employeeRead", "piiRead", "caseWrite", "audit", "admin", "wfmRead", "floorView", "log"]
+      .filter((p) => can({ role: "ITSupport" }, p)), []);
+  eq("IT sees one screen", TABS_FOR.ITSupport, ["helpdesk"]);
+
+  /* The permission map and the database enum must agree. They are two files
+     that both define "what roles exist", and I have now had them disagree
+     once: adding ITSupport to auth.js without adding it to the Prisma enum
+     produced a login that simply could not be created, with the insert failing
+     silently and the sign-in failing for a reason that pointed nowhere near
+     the cause. */
+  const schemaText = readFileSync(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
+  const dbRoles = /enum Role \{([^}]*)\}/.exec(schemaText)[1]
+    .split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("//"));
+  eq("every role in auth.js exists in the database enum", ROLES.filter((r) => !dbRoles.includes(r)), []);
+  eq("and every database role has permissions defined", dbRoles.filter((r) => !ROLES.includes(r)), []);
+  eq("every role has a label", ROLES.filter((r) => !ROLE_LABEL[r]), []);
+  eq("and a screen list, even if empty", ROLES.filter((r) => !Array.isArray(TABS_FOR[r])), []);
+  eq("nobody else can issue a recovery code",
+    ROLES.filter((r) => can({ role: r }, "issueReset")), ["SuperAdmin", "ITSupport"]);
   eq("agents have no workspace tabs", TABS_FOR.Agent.length, 0);
   /* WFM owns the plan and the floor it plays out on — but they still never
      reach the case pipeline, the directory, or anything about a person that is

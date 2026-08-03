@@ -2,7 +2,7 @@
    server alike. Password hashing lives in passwords.ts (server-only); the
    NextAuth wiring lives in src/auth.ts. */
 
-export const ROLES = ["SuperAdmin", "HRBusinessPartner", "OperationsLead", "ProjectManager", "WFM", "Agent"];
+export const ROLES = ["SuperAdmin", "HRBusinessPartner", "OperationsLead", "ProjectManager", "WFM", "ITSupport", "Agent"];
 
 export const ROLE_LABEL = {
   SuperAdmin: "Super Admin",
@@ -10,6 +10,7 @@ export const ROLE_LABEL = {
   OperationsLead: "Operations Lead",
   ProjectManager: "Project Manager",
   WFM: "WFM",
+  ITSupport: "IT Support",
   Agent: "Agent",
 };
 
@@ -52,6 +53,12 @@ export const TABS_FOR = {
     "dashboard", "joining", "floor", "requests", "approvals",
     "triage", "agents", "leaving", "people", "roster", "insights", "audit",
   ],
+  /* IT exists to unlock people, and that is all. No directory, no cases, no
+     pay — an account-recovery desk needs to know that a login exists and that
+     the person in front of them matches it, and nothing else. Giving them the
+     directory "so they can find someone" would hand the widest-hours, highest-
+     turnover team in the building a read of the whole employee record. */
+  ITSupport: ["helpdesk"],
   Agent: [],
 };
 
@@ -94,6 +101,16 @@ const PERMS = {
   punchOthers: ["SuperAdmin", "WFM", "OperationsLead", "ProjectManager"],
   // The live floor view. WFM is the primary consumer; leads see their own scope.
   floorView: ["SuperAdmin", "WFM", "OperationsLead", "ProjectManager", "HRBusinessPartner"],
+
+  /* ── Account recovery ───────────────────────────────────────────────────
+     Issuing a reset code is not the same power as changing a password, and the
+     split is the point: an IT desk can start a recovery, but only the employee
+     can finish one. Nobody with this permission ever learns a password. */
+  issueReset: ["SuperAdmin", "ITSupport"],
+  /* Killing a live code — for when someone reports a code they did not ask
+     for. Deliberately as wide as issuing it: whoever can start a recovery must
+     be able to stop one, immediately, without finding an admin. */
+  revokeReset: ["SuperAdmin", "ITSupport"],
 
   /* ── Workforce management ───────────────────────────────────────────────
      Reading the plan is deliberately wide. A lead who cannot see that 14:00 is
