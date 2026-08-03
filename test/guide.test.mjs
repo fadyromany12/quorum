@@ -62,6 +62,32 @@ for (const r of ROLES) {
   }
 }
 
+console.log("\n── A permission with no screen behind it ──");
+/* The defect this pins: SuperAdmin held issueReset and revokeReset while
+   "helpdesk" was absent from their tab list. Every field was individually
+   valid — the permission existed, the screen existed, the section existed —
+   so checkGuide() reported nothing, and the guide told them to go to a Help
+   desk their sidebar did not contain. It is the pairing that was wrong, and
+   only a check that looks at both at once can see it. */
+for (const [perm, tab] of [["issueReset", "helpdesk"], ["revokeReset", "helpdesk"], ["scheduleWrite", "wfm"], ["piiRead", "people"]]) {
+  for (const r of ROLES) {
+    if (!can({ role: r }, perm)) continue;
+    ok(`${r} holds ${perm} and can open the ${tab} screen to use it`, (TABS_FOR[r] ?? []).includes(tab));
+  }
+}
+ok("a Super Admin can reach the help desk they are told about",
+  (TABS_FOR.SuperAdmin ?? []).includes("helpdesk") && mentions("SuperAdmin", /one-time code/i));
+/* And the check itself notices when that stops being true, rather than the
+   assertion above being the only thing standing between us and a repeat. */
+{
+  const kept = [...TABS_FOR.SuperAdmin];
+  TABS_FOR.SuperAdmin = kept.filter((t) => t !== "helpdesk");
+  const caught = G.checkGuide().some((p) => /SuperAdmin holds "issueReset"/.test(p));
+  TABS_FOR.SuperAdmin = kept;
+  ok("checkGuide reports a permission whose screen the role cannot open", caught);
+  eq("and the tab list is left as it was found", TABS_FOR.SuperAdmin, kept);
+}
+
 console.log("\n── Specific roles read the way the role actually works ──");
 ok("an Operations Lead is told about approvals", mentions("OperationsLead", /waiting on you/i));
 ok("an Operations Lead is not told about case review", !mentions("OperationsLead", /escalate, dismiss/i));

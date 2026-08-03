@@ -37,9 +37,15 @@ export function passwordProblem(pw) {
 /* What each staff role may see. Agents never reach the workspace at all —
    they live in /agent-portal, enforced by the route-group layouts. */
 export const TABS_FOR = {
+  /* Everything, including the help desk. SuperAdmin holds issueReset and
+     revokeReset, and for a while held them with nowhere to use them: the
+     permission passed, the API would have answered, and the screen was simply
+     not in this list. The guide even told them where to go. A permission
+     without a screen is not a smaller capability — it is an absent one. */
   SuperAdmin: [
     "dashboard", "joining", "floor", "requests", "approvals", "log", "rta", "wfm",
-    "triage", "agents", "leaving", "people", "roster", "insights", "audit", "matrix", "users", "settings",
+    "triage", "agents", "leaving", "people", "roster", "insights", "audit",
+    "helpdesk", "matrix", "users", "settings",
   ],
   /* WFM owns real-time adherence and the plan behind it. The planning screen is
      their primary one now — the floor tells them what is happening, the plan

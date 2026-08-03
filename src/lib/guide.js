@@ -36,7 +36,14 @@ const PORTAL = { id: "portal", label: "Your portal" };
 /* Each entry names what it needs. `perm` is checked with can(); `tab` is
    checked against the role's screens; `role` pins a line to one role. An entry
    with a `tab` inherits that tab's section; anything else declares one, and
-   checkGuide() rejects a section id the navigation does not define. */
+   checkGuide() rejects a section id the navigation does not define.
+
+   An entry may carry both, and the ones whose `where` names a real screen do.
+   That pairing is the assertion: holding the permission is not the same as
+   being able to reach the place the line sends you, and for a while SuperAdmin
+   held issueReset while the Help desk was absent from their sidebar. Both
+   fields were individually valid the whole time, which is exactly why the
+   check that looked at them separately saw nothing wrong. */
 const ENTRIES = [
   // ── Everyone with a workspace ──
   { tab: "dashboard", what: "See headcount, joiners, people on a plan and leavers at a glance", where: "Overview" },
@@ -45,8 +52,8 @@ const ENTRIES = [
 
   // ── Joining ──
   { tab: "joining", what: "Chase everyone between an accepted offer and a confirmed probation", where: "New joiners" },
-  { perm: "employeeWrite", section: "join", what: "Admit a new person and create their employment record", where: "Directory → Admit someone" },
-  { perm: "lifecycle", section: "join", what: "Move someone through the lifecycle — confirm probation, open a plan, record an exit", where: "Any record" },
+  { perm: "employeeWrite", tab: "people", section: "join", what: "Admit a new person and create their employment record", where: "Directory → Admit someone" },
+  { perm: "lifecycle", tab: "people", section: "join", what: "Move someone through the lifecycle — confirm probation, open a plan, record an exit", where: "Any record" },
 
   // ── Working ──
   { tab: "floor", what: "Watch who is logged in, what state they are in, and who is over their break", where: "Live floor" },
@@ -55,9 +62,9 @@ const ENTRIES = [
   { tab: "log", what: "Log an attendance or conduct event against someone", where: "Log an event" },
   { tab: "rta", what: "Import the adherence report and turn it into cases", where: "Import adherence" },
   { tab: "wfm", what: "See what the queue needs hour by hour, and whether the roster covers it", where: "Planning" },
-  { perm: "wfmWrite", section: "work", what: "Load a demand forecast and set the service target it is planned to", where: "Planning → Forecast" },
-  { perm: "scheduleWrite", section: "work", what: "Build and publish the roster — shifts, training, days off", where: "Planning → Roster" },
-  { perm: "punchOthers", section: "work", what: "Clock someone in or out on their behalf when their headset dies", where: "Live floor" },
+  { perm: "wfmWrite", tab: "wfm", section: "work", what: "Load a demand forecast and set the service target it is planned to", where: "Planning → Forecast" },
+  { perm: "scheduleWrite", tab: "wfm", section: "work", what: "Build and publish the roster — shifts, training, days off", where: "Planning → Roster" },
+  { perm: "punchOthers", tab: "floor", section: "work", what: "Clock someone in or out on their behalf when their headset dies", where: "Live floor" },
 
   // ── Growing ──
   { tab: "triage", what: "Review new cases — escalate, dismiss or send them on", where: "Case review" },
@@ -67,18 +74,18 @@ const ENTRIES = [
   { tab: "leaving", what: "Track people serving notice and tick their exit clearance", where: "Leavers" },
 
   // ── Records and trust ──
-  { perm: "piiRead", section: "records", what: "Reveal identifiers and bank details — every view is recorded against your name", where: "Any record → Reveal" },
-  { perm: "piiWrite", section: "records", what: "Correct identifiers and payroll details", where: "Any record" },
+  { perm: "piiRead", tab: "people", section: "records", what: "Reveal identifiers and bank details — every view is recorded against your name", where: "Any record → Reveal" },
+  { perm: "piiWrite", tab: "people", section: "records", what: "Correct identifiers and payroll details", where: "Any record" },
   { tab: "insights", what: "See headcount movement, attrition and who is worth a conversation", where: "Insights" },
-  { perm: "piiRead", section: "records", what: "See what accrued untaken leave would cost to pay out", where: "Insights" },
+  { perm: "piiRead", tab: "insights", section: "records", what: "See what accrued untaken leave would cost to pay out", where: "Insights" },
   { tab: "audit", what: "Read the immutable log of who did what", where: "Audit trail" },
 
   // ── Setup ──
   { tab: "matrix", what: "Change the discipline matrix — the rules every verdict comes from", where: "Discipline matrix" },
   { tab: "users", what: "Create logins, set roles and reset passwords", where: "Accounts" },
   { tab: "settings", what: "Manage accounts, their lines of business, and team leads", where: "Settings" },
-  { perm: "issueReset", section: "setup", what: "Issue a one-time code so someone locked out can set a new password themselves", where: "Help desk" },
-  { perm: "revokeReset", section: "setup", what: "Kill a live code immediately if someone reports one they did not ask for", where: "Help desk" },
+  { perm: "issueReset", tab: "helpdesk", section: "setup", what: "Issue a one-time code so someone locked out can set a new password themselves", where: "Help desk" },
+  { perm: "revokeReset", tab: "helpdesk", section: "setup", what: "Kill a live code immediately if someone reports one they did not ask for", where: "Help desk" },
 
   // ── Agents ──
   { role: "Agent", section: "portal", what: "Clock in and out, and change your state through the day", where: "Your portal" },
@@ -159,6 +166,22 @@ export function checkGuide() {
     if (!section) problems.push(`${at} has no section, so it would be grouped nowhere.`);
     else if (!sections.has(section)) problems.push(`${at} sits in unknown section "${section}".`);
     if (!ROLES.some((r) => visible(e, r))) problems.push(`${at} is visible to no role at all.`);
+
+    /* The pairing. Holding a permission and being able to open the screen it is
+       exercised on are different facts, and the app enforces them separately —
+       so a role can hold `issueReset`, have the API answer, and have no sidebar
+       entry to reach it from. visible() hides the line, which keeps the guide
+       from lying; this reports why it was hidden, which is the part worth
+       fixing. Checking `perm` and `tab` one at a time never sees it: both are
+       individually valid the entire time the capability is unreachable. */
+    if (e.perm && e.tab) {
+      for (const r of ROLES) {
+        if (!can({ role: r }, e.perm) || (TABS_FOR[r] ?? []).includes(e.tab)) continue;
+        problems.push(
+          `${r} holds "${e.perm}" but has no "${e.tab}" screen, so ${at} — which sends them to ${e.where} — is a permission they cannot use.`,
+        );
+      }
+    }
   }
 
   for (const r of ROLES) {
