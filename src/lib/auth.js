@@ -38,19 +38,19 @@ export function passwordProblem(pw) {
 export const TABS_FOR = {
   SuperAdmin: [
     "dashboard", "joining", "floor", "requests", "approvals", "log", "rta", "wfm",
-    "triage", "agents", "leaving", "people", "roster", "audit", "matrix", "users", "settings",
+    "triage", "agents", "leaving", "people", "roster", "insights", "audit", "matrix", "users", "settings",
   ],
   /* WFM owns real-time adherence and the plan behind it. The planning screen is
      their primary one now — the floor tells them what is happening, the plan
      tells them what was supposed to. */
   WFM: ["wfm", "floor", "rta"],
-  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster"],
-  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster"],
+  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster", "insights"],
+  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster", "insights"],
   /* HR owns both ends of the journey — admitting people and exiting them — so
      joining and leaving are theirs before anyone else's. */
   HRBusinessPartner: [
     "dashboard", "joining", "floor", "requests", "approvals",
-    "triage", "agents", "leaving", "people", "roster", "audit",
+    "triage", "agents", "leaving", "people", "roster", "insights", "audit",
   ],
   Agent: [],
 };

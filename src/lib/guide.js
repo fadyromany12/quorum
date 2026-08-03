@@ -68,6 +68,8 @@ const ENTRIES = [
   // ── Records and trust ──
   { perm: "piiRead", section: "records", what: "Reveal identifiers and bank details — every view is recorded against your name", where: "Any record → Reveal" },
   { perm: "piiWrite", section: "records", what: "Correct identifiers and payroll details", where: "Any record" },
+  { tab: "insights", what: "See headcount movement, attrition and who is worth a conversation", where: "Insights" },
+  { perm: "piiRead", section: "records", what: "See what accrued untaken leave would cost to pay out", where: "Insights" },
   { tab: "audit", what: "Read the immutable log of who did what", where: "Audit trail" },
 
   // ── Setup ──

@@ -36,6 +36,7 @@ import {
   UserPlus,
   UserMinus,
   Gauge,
+  TrendingUp,
 } from "lucide-react";
 
 import { useServerData } from "../hooks/useServerData.js";
@@ -67,6 +68,7 @@ import People from "./People.jsx";
 import FloorView from "./FloorView.jsx";
 import RequestInbox from "./RequestInbox.jsx";
 import WfmPlanner from "./WfmPlanner.jsx";
+import Insights from "./Insights.jsx";
 import { navFor, sectionOfTab, stagesOf } from "../lib/journey.js";
 
 /* What each screen is called and what it looks like. Where it sits is decided
@@ -86,6 +88,7 @@ const TAB_META = {
   leaving: { label: "Leavers", icon: UserMinus },
   people: { label: "Directory", icon: IdCard },
   roster: { label: "All employees", icon: Table2 },
+  insights: { label: "Insights", icon: TrendingUp },
   audit: { label: "Audit trail", icon: ScrollText },
   matrix: { label: "Discipline matrix", icon: Table2 },
   users: { label: "Accounts", icon: UserCog },
@@ -252,7 +255,7 @@ export default function Workspace({ initial, me, themeIntent }) {
   // "people" is in this list for a different reason than the rest: the others
   // are admin screens, but the directory genuinely has its own data source and
   // is meaningful with an empty case ledger.
-  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests", "wfm"].includes(tab);
+  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests", "wfm", "insights"].includes(tab);
 
   return (
     <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
@@ -526,6 +529,8 @@ export default function Workspace({ initial, me, themeIntent }) {
             )}
 
             {tab === "rta" && can(me, "upload") && <RtaUploader data={data} me={me} onCommit={commitRta} />}
+
+            {tab === "insights" && <Insights accounts={data.accounts} />}
 
             {tab === "wfm" && (
               <WfmPlanner

@@ -46,7 +46,7 @@ export const EMPLOYED_STAGES = ["Onboarding", "Probation", "Active", "OnPip", "S
 /**
  * Headcount movement over a window, and whether it reconciles.
  *
- * @param {Array<{stage: string, hireDate?: string, exitDate?: string, exitType?: string}>} employees
+ * @param {Array<{stage: string, hireDate?: string, exitDate?: string|null, exitType?: string|null, exitReason?: string|null}>} employees
  * @param {string} from YYYY-MM-DD inclusive
  * @param {string} to YYYY-MM-DD inclusive
  */
