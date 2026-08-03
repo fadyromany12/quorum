@@ -13,6 +13,7 @@ import AckCenter from "@/components/portal/AckCenter";
 import AgentClock from "@/components/portal/AgentClock";
 import MyRequests from "@/components/portal/MyRequests";
 import MyPayslips from "@/components/portal/MyPayslips";
+import MyProfile from "@/components/portal/MyProfile";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
 import { annualEntitlement } from "@/lib/employee.js";
@@ -100,6 +101,13 @@ export default async function AgentPortalPage() {
           appealState: (e.appealState as string) || "",
         }))}
       />
+
+      {/* My record. Below the action queues because it is a reference screen
+          rather than something with a daily rhythm — but above the standing
+          reports, because it is the only panel here the employee can change,
+          and the completeness warning on it can be the reason payroll has not
+          been able to pay them. */}
+      <MyProfile />
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
