@@ -21,7 +21,7 @@
 
 import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
-import { guarded, GuardError, requireRole } from "@/lib/api-guard";
+import { guarded, GuardError } from "@/lib/api-guard";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/db";
 import { auth } from "@/auth";

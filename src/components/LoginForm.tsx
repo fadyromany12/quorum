@@ -71,9 +71,22 @@ export default function LoginForm({ locale }: { locale: string }) {
       <GlassCard glow="violet" className="gradient-hairline">
         <form onSubmit={mode === "signIn" ? submit : recover} className="grid gap-4">
           <h1 className="flex items-center gap-2 text-[13px] font-bold uppercase tracking-wider text-[color:var(--ink)]">
-            <LogIn size={15} className="text-[color:var(--signal)]" />
-            {t(locale, "login.signIn")}
+            {mode === "signIn" ? (
+              <LogIn size={15} className="text-[color:var(--signal)]" />
+            ) : (
+              <KeyRound size={15} className="text-[color:var(--signal)]" />
+            )}
+            {mode === "signIn" ? t(locale, "login.signIn") : "Set a new password"}
           </h1>
+
+          {/* Says what to do before asking for the code, because someone in
+              recovery mode has arrived here without knowing where a code comes
+              from. */}
+          {mode === "recover" && (
+            <p className="text-[12px] leading-relaxed text-[color:var(--sub)]">
+              {DELIVERY.itIssued.instruction} It is good for {CODE_TTL_MINUTES} minutes and works once.
+            </p>
+          )}
           <div>
             <GlassLabel>{t(locale, "login.email")}</GlassLabel>
             <GlassInput
