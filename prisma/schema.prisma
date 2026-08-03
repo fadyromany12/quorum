@@ -712,6 +712,14 @@ model AppConfig {
   id       Int  @id @default(1)
   accounts Json // ["Hertz", "Lenovo", "Beko"]
   tls      Json // team-lead display names
+
+  // Payroll rates: { configured, socialInsuranceRate, taxRate, note, updatedBy }.
+  // Nullable rather than defaulted, and read as "not configured" when absent —
+  // a defaulted 0 would make every payslip print a zero tax line that looks
+  // computed. Json rather than columns because these are a set of rates that
+  // will grow (brackets, employer share, allowances) and each addition should
+  // not be a migration on a table with one row.
+  payroll Json?
 }
 
 // Login throttle state, shared across serverless instances. One row per failed

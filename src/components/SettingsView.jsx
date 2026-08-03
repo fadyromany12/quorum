@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, DatabaseZap, TriangleAlert, Plus, X } from "lucide-react";
-import { Card, TInput, BtnPrimary, BtnGhost, Muted } from "./ui/index.jsx";
+import { Card, TInput, BtnPrimary, BtnGhost, Muted, Field } from "./ui/index.jsx";
 import { P, alpha } from "../lib/tokens.js";
 import { RESET_DAYS, PER_INCIDENT_CAP, PER_MONTH_CAP, EMERGENCY_QUOTA, LAW_CITATION } from "../lib/constants.js";
 import { checkAccounts } from "../lib/org.js";
@@ -169,6 +169,8 @@ export default function SettingsView({ data, onAccounts, onTls, onReset, onExpor
       <OrgEditor org={data.org ?? []} onChange={onAccounts} />
       <ListEditor title="Team leads / managers" items={data.tls} placeholder="Full name" onChange={onTls} />
 
+      <PayrollRates />
+
       <Card title="Sample data">
         <Muted>
           Loads a demo ledger across all three accounts: a warning chain that resets after 90 days, a full 1st → 2nd →
@@ -233,5 +235,124 @@ function Rule({ label, children }) {
       </span>
       <span>{children}</span>
     </div>
+  );
+}
+
+/* Statutory payroll rates.
+
+   Kept out of the config save above on purpose. Accounts and team leads are
+   edited constantly and by several people; these two numbers change a few times
+   a decade and change what every employee is paid. Sharing a save button would
+   mean a routine edit to the account list could carry a stale tax rate back
+   over a correct one.
+
+   The fields take percentages because that is how finance says them out loud.
+   That also makes the catchable mistake catchable: typing 11 in a field that
+   wanted 0.11 is refused, and the uncatchable one — typing 0.11 meaning eleven
+   per cent — is at least the direction that looks wrong on a payslip. */
+function PayrollRates() {
+  const [state, setState] = useState(null);
+  const [form, setForm] = useState({ socialInsurancePct: "", taxPct: "", note: "" });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const load = async () => {
+    try {
+      const r = await fetch("/api/payroll");
+      if (!r.ok) return;
+      const j = await r.json();
+      setState(j);
+      setForm({
+        socialInsurancePct: j.configured ? String(j.socialInsurancePct) : "",
+        taxPct: j.configured ? String(j.taxPct) : "",
+        note: j.note ?? "",
+      });
+    } catch { /* the card simply does not render its form */ }
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const r = await fetch("/api/payroll", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          socialInsurancePct: Number(form.socialInsurancePct),
+          taxPct: Number(form.taxPct),
+          note: form.note,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "The rates were refused.");
+      setState(j);
+      setMessage("Saved. Payslips from now on will show both deductions.");
+    } catch (e) {
+      setMessage(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Payroll rates">
+      <Muted>
+        Social insurance and income tax are never assumed. Until both are set here, every payslip prints its earnings
+        and absence deductions and states on its face that it is not a final net figure — rather than showing a zero
+        that looks calculated.
+      </Muted>
+
+      {state && !state.canEdit && (
+        <div className="mt-3" style={{ fontSize: 12.5, color: P.sub }}>
+          {state.configured
+            ? `Set to ${state.socialInsurancePct}% social insurance and ${state.taxPct}% income tax${state.updatedBy ? ` by ${state.updatedBy}` : ""}.`
+            : "Not configured yet. A Super Admin can set these."}
+        </div>
+      )}
+
+      {state?.canEdit && (
+        <>
+          <div className="grid gap-2 md:grid-cols-3 mt-3">
+            <Field label="Social insurance %">
+              <TInput
+                value={form.socialInsurancePct}
+                onChange={(e) => setForm({ ...form, socialInsurancePct: e.target.value })}
+                placeholder="11"
+                inputMode="decimal"
+              />
+            </Field>
+            <Field label="Income tax %">
+              <TInput
+                value={form.taxPct}
+                onChange={(e) => setForm({ ...form, taxPct: e.target.value })}
+                placeholder="10"
+                inputMode="decimal"
+              />
+            </Field>
+            <Field label="Note (optional)">
+              <TInput
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+                placeholder="Source and date of these rates"
+              />
+            </Field>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap mt-3">
+            <BtnPrimary onClick={save} disabled={busy || form.socialInsurancePct === "" || form.taxPct === ""}>
+              Save rates
+            </BtnPrimary>
+            {state.configured && state.updatedBy && (
+              <Muted>Last set by {state.updatedBy}{state.updatedAt ? ` on ${String(state.updatedAt).slice(0, 10)}` : ""}.</Muted>
+            )}
+            {message && <span style={{ fontSize: 12.5, color: P.inkSoft }}>{message}</span>}
+          </div>
+          <Muted>
+            Enter 11 for eleven per cent. These come from your finance team, not from this system — nothing here
+            invents a rate.
+          </Muted>
+        </>
+      )}
+    </Card>
   );
 }

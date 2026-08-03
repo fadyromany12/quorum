@@ -14,10 +14,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft, RefreshCw, Mail, Phone, Building2, CalendarDays, ShieldCheck,
-  IdCard, Eye, Lock, GitBranch, Clock, AlertTriangle, Award, ArrowRightLeft,
+  IdCard, Eye, Lock, GitBranch, Clock, AlertTriangle, Award, ArrowRightLeft, Banknote, Plus,
   UserMinus, StickyNote, Briefcase, GraduationCap, Landmark, Users2,
 } from "lucide-react";
-import { Card, Pill, Muted, BtnGhost, BtnPrimary } from "./ui/index.jsx";
+import { Card, Pill, Muted, BtnGhost, BtnPrimary, TInput, TSelect, Field } from "./ui/index.jsx";
 import { P } from "../lib/tokens.js";
 import { fmtStamp, plural } from "../lib/format.js";
 import { todayStr } from "../lib/dates.js";
@@ -402,6 +402,11 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
           the journey — and readiness is the answer operations wants first. */}
       <TrainingPanel employeeId={employeeId} onChanged={load} />
 
+      {/* Pay. Behind the same reveal as the identifiers, and for the same
+          reason: it is the fact most likely to be misused if it travels
+          further than it needs to. */}
+      <PayPanel employeeId={employeeId} onChanged={load} />
+
       {["Notice", "Exited"].includes(employee.stage) && <ClearancePanel employeeId={employeeId} />}
 
       {/* ── Timeline ── */}
@@ -742,6 +747,166 @@ function TrainingPanel({ employeeId, onChanged }) {
 
 /* The exit checklist. The API refuses out-of-order ticks with the reason, so
    this panel just shows state and passes refusals through verbatim. */
+/* Salary: the current figure, its history, and a way to record the next one.
+
+   Deliberately reveal-on-demand, like the identifiers above it. Someone opens
+   an employee record twenty times a week to check a manager or a hire date, and
+   a salary sitting in the corner of that screen is a salary read by everyone
+   who has ever glanced over a shoulder in an open-plan office.
+
+   Every change is a new version rather than an edit. "What were they earning
+   last March" is a question payroll, an auditor and a labour court all ask, and
+   a field that overwrites cannot answer it at all — so the history is the
+   feature and the current figure is just its first row. */
+function PayPanel({ employeeId, onChanged }) {
+  const [state, setState] = useState("idle"); // idle | loading | shown | denied | error
+  const [data, setData] = useState(null);
+  const [message, setMessage] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ amount: "", effectiveFrom: todayStr(), reason: "Merit", note: "" });
+  const [busy, setBusy] = useState(false);
+
+  const load = async (quiet) => {
+    if (!quiet) setState("loading");
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/compensation`);
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 403) { setState("denied"); setMessage(json.error || "Your role cannot view pay."); return; }
+      if (!res.ok) throw new Error(json.error || "Could not load pay.");
+      setData(json);
+      setState("shown");
+    } catch (e) {
+      setState("error");
+      setMessage(e.message);
+    }
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/compensation`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "The change was refused.");
+      setAdding(false);
+      setForm({ amount: "", effectiveFrom: todayStr(), reason: "Merit", note: "" });
+      await load(true);
+      onChanged?.();
+    } catch (e) {
+      setMessage(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title={<span className="inline-flex items-center gap-2"><Banknote size={14} />Pay</span>}
+      right={
+        state === "shown" ? (
+          <span className="ao-mono" style={{ fontSize: 11, color: P.sub }}>
+            {plural(data?.records?.length ?? 0, "version")}
+          </span>
+        ) : null
+      }
+    >
+      {state === "idle" && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <BtnGhost icon={Eye} onClick={() => load()}>Reveal pay</BtnGhost>
+          <Muted>Hidden by default. Revealing is recorded against your name.</Muted>
+        </div>
+      )}
+      {state === "loading" && <Muted>Loading…</Muted>}
+      {(state === "denied" || state === "error") && (
+        <div style={{ fontSize: 12.5, color: state === "denied" ? P.sub : P.brick }}>{message}</div>
+      )}
+
+      {state === "shown" && (
+        <div className="grid gap-3">
+          {!data.current && (
+            <Muted>
+              No salary on record. Until one is entered, this person's payslips cannot be issued — the payslip says so
+              rather than showing zero.
+            </Muted>
+          )}
+
+          {data.current && (
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="ao-mono font-semibold" style={{ fontSize: 22, color: P.ink }}>
+                {data.current.currency} {data.current.display}
+              </span>
+              <span style={{ fontSize: 12, color: P.sub }}>
+                per month, from {data.current.effectiveFrom} · {data.current.reason}
+              </span>
+            </div>
+          )}
+
+          {data.records.length > 1 && (
+            <div className="grid gap-1">
+              {data.records.slice(1).map((r) => (
+                <div key={r.id} className="flex items-baseline gap-3" style={{ fontSize: 12, color: P.sub }}>
+                  <span className="ao-mono" style={{ minWidth: 88 }}>{r.effectiveFrom}</span>
+                  <span className="ao-mono">{r.display}</span>
+                  <span>{r.reason}</span>
+                  {r.changePct !== null && (
+                    <span style={{ color: r.changePct > 0 ? P.green : P.amber }}>
+                      {r.changePct > 0 ? "+" : ""}{r.changePct}%
+                    </span>
+                  )}
+                  {r.voided && <span style={{ color: P.brick }}>voided</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!adding && (
+            <div>
+              <BtnGhost icon={Plus} onClick={() => setAdding(true)}>Record a change</BtnGhost>
+            </div>
+          )}
+
+          {adding && (
+            <div className="grid gap-2 md:grid-cols-4 ao-rise">
+              <Field label="Monthly salary">
+                <TInput
+                  value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  placeholder="9000"
+                  inputMode="decimal"
+                />
+              </Field>
+              <Field label="Effective from">
+                <TInput type="date" value={form.effectiveFrom} onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })} />
+              </Field>
+              <Field label="Reason">
+                <TSelect value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}>
+                  {(data.reasons ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
+                </TSelect>
+              </Field>
+              <Field label="Note (optional)">
+                <TInput value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+              </Field>
+              <div className="md:col-span-4 flex items-center gap-2 flex-wrap">
+                <BtnPrimary onClick={save} disabled={busy || !form.amount}>Record</BtnPrimary>
+                <BtnGhost onClick={() => { setAdding(false); setMessage(""); }}>Cancel</BtnGhost>
+                {message && <span style={{ fontSize: 12.5, color: P.brick }}>{message}</span>}
+                <Muted>
+                  A decrease must be labelled a Demotion, Adjustment or Correction — an unlabelled cut is far more often
+                  a dropped digit than an intended one.
+                </Muted>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ClearancePanel({ employeeId }) {
   const [steps, setSteps] = useState(null);
   const [complete, setComplete] = useState(false);

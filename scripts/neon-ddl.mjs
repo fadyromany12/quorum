@@ -81,27 +81,82 @@ for (const s of statements) {
 }
 console.log(`DDL: ${ran} ran, ${skipped} already existed.`);
 
-/* Verify per column rather than per table. "Already exists" on a table that
-   predates this run would hide a column the run was supposed to add, so the
-   check that matters is that every column the schema expects is present. */
-const after = await tablesNow();
-const added = after.filter((t) => !before.includes(t));
-console.log(`After: ${after.length} tables (+${added.length}: ${added.join(", ") || "none"})`);
+/* ── The blind spot, closed ───────────────────────────────────────────────────
 
-const expected = {
-  Forecast: ["id", "account", "lob", "date", "interval", "contacts", "ahtSeconds", "source", "actorName", "actorRole", "note", "createdAt", "updatedAt"],
-  ShiftPattern: ["id", "name", "account", "lob", "startTime", "durationMinutes", "paidBreakMinutes", "unpaidBreakMinutes", "active", "createdAt", "updatedAt"],
-  ScheduleEntry: ["id", "employeeId", "date", "activity", "startTime", "durationMinutes", "patternId", "published", "note", "actorName", "actorRole", "createdAt", "updatedAt"],
-};
+   A `--from-empty` diff expresses a new column as a line inside a CREATE TABLE.
+   If the table already exists, that whole statement is skipped as "already
+   exists" and the column is silently never added — the schema and the database
+   drift with nothing reporting it. This bit me adding one nullable column to a
+   table with a single row.
+
+   So the expected columns are parsed out of the CREATE TABLE blocks and
+   compared against what the database actually has. Anything missing is added
+   with an explicit ALTER, and the same parse then serves as the verification
+   pass — every table, not a hand-written list of the ones I happened to be
+   thinking about.
+
+   Only nullable or defaulted columns can be added this way. A NOT NULL column
+   with no default cannot be added to a table that has rows, and what those rows
+   should say is a decision for a person; those are refused rather than guessed
+   at, and the run exits non-zero. */
+
+function expectedColumns(sql) {
+  const out = new Map();
+  const re = /CREATE TABLE\s+"?(?:public"?\.)?"([^"]+)"\s*\(([\s\S]*?)\n\);/g;
+  let m;
+  while ((m = re.exec(sql))) {
+    const [, table, body] = m;
+    const cols = [];
+    for (const raw of body.split("\n")) {
+      const line = raw.trim().replace(/,$/, "");
+      if (/^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK)\b/i.test(line)) continue;
+      const c = /^"([^"]+)"\s+(.+)$/.exec(line);
+      if (c) cols.push({ name: c[1], definition: c[2] });
+    }
+    if (cols.length) out.set(table, cols);
+  }
+  return out;
+}
+
+const expected = expectedColumns(readFileSync(file, "utf8"));
+const newTables = (await tablesNow()).filter((t) => !before.includes(t));
+
+let addedColumns = 0;
+const refused = [];
+for (const [table, cols] of expected) {
+  if (!before.includes(table)) continue; // just created above, nothing to reconcile
+  const have = new Set(
+    (await q(`select column_name from information_schema.columns where table_schema='public' and table_name=$1`, [table]))
+      .map((r) => r.column_name)
+  );
+  for (const col of cols) {
+    if (have.has(col.name)) continue;
+    if (/NOT NULL/i.test(col.definition) && !/DEFAULT/i.test(col.definition)) {
+      refused.push(`${table}.${col.name} is NOT NULL with no default — existing rows need a value someone has to choose.`);
+      continue;
+    }
+    await pool.query(`ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS "${col.name}" ${col.definition}`);
+    console.log(`  + ${table}.${col.name}`);
+    addedColumns++;
+  }
+}
+console.log(`After: ${(await tablesNow()).length} tables (+${newTables.length}: ${newTables.join(", ") || "none"}), ${addedColumns} column(s) added to existing tables.`);
+
+/* Verification over the whole schema, not a list I maintain by hand. */
 let missing = 0;
-for (const [table, cols] of Object.entries(expected)) {
-  const have = (await q(
-    `select column_name from information_schema.columns where table_schema='public' and table_name=$1`,
-    [table]
-  )).map((r) => r.column_name);
-  const gone = cols.filter((c) => !have.includes(c));
+for (const [table, cols] of expected) {
+  const have = new Set(
+    (await q(`select column_name from information_schema.columns where table_schema='public' and table_name=$1`, [table]))
+      .map((r) => r.column_name)
+  );
+  const gone = cols.filter((c) => !have.has(c.name)).map((c) => c.name);
   if (gone.length) { missing += gone.length; console.error(`  ${table}: MISSING ${gone.join(", ")}`); }
-  else console.log(`  ${table}: all ${cols.length} columns present`);
+}
+console.log(missing === 0 ? `Every column in all ${expected.size} tables is present.` : `${missing} column(s) missing.`);
+
+if (refused.length) {
+  console.error("Refused to add:");
+  for (const r of refused) console.error("  " + r);
 }
 
 const countsAfter = {};
@@ -110,4 +165,4 @@ const lost = Object.keys(counts).filter((t) => countsAfter[t] < counts[t]);
 console.log(`Row counts unchanged: ${lost.length === 0} — ${JSON.stringify(countsAfter)}`);
 
 await pool.end();
-process.exit(missing === 0 && lost.length === 0 ? 0 : 1);
+process.exit(missing === 0 && lost.length === 0 && refused.length === 0 ? 0 : 1);

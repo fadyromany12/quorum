@@ -37,6 +37,7 @@ import { buildPayslip, checkPayslip } from "@/lib/payslip.js";
 import { toMinor } from "@/lib/comp.js";
 import { LEAVE_TYPES } from "@/lib/taxonomy.js";
 import { statusOf } from "@/lib/workflow.js";
+import { readPayroll } from "@/lib/payroll-config.js";
 import { toRequest } from "@/lib/workflow-db";
 
 const isPeriod = (s: string) => /^\d{4}-\d{2}$/.test(s);
@@ -80,7 +81,7 @@ export const GET = guarded(async (req: Request) => {
 
   const { from, to } = bounds(period);
 
-  const [pay, roster, cases, leave] = await Promise.all([
+  const [pay, roster, cases, leave, config] = await Promise.all([
     /* In force on the last day of the period. A raise dated mid-period is a
        proration question this does not pretend to answer — it takes the rate
        that governs the month and says which record it used. */
@@ -100,7 +101,13 @@ export const GET = guarded(async (req: Request) => {
       where: { subjectId: employeeId, type: "leave" },
       include: { steps: true, subject: true },
     }),
+    prisma.appConfig.findUnique({ where: { id: 1 }, select: { payroll: true } }),
   ]);
+
+  /* Absent or unusable rates read as unconfigured, never as zero. The payslip
+     then says on its face that it is not a final net figure rather than
+     printing a 0.00 tax line that looks like a calculation. */
+  const statutory = readPayroll(config?.payroll);
 
   const rosterRows = roster.map((r) => ({
     ...r,
@@ -144,6 +151,7 @@ export const GET = guarded(async (req: Request) => {
     roster: rosterRows,
     unpaidDays,
     disciplinaryDeductionDays,
+    statutory,
     currency: pay?.currency ?? "EGP",
   });
   const problems = checkPayslip(slip);
@@ -170,6 +178,8 @@ export const GET = guarded(async (req: Request) => {
       overtimeRows: rosterRows.filter((r) => r.activity === "Overtime").length,
       unpaidLeaveRequestIds: unpaidRefs,
       disciplinaryCaseIds: cases.filter((c) => c.deductionApplied > 0).map((c) => c.id),
+      statutoryRatesSetBy: statutory.configured ? statutory.updatedBy : null,
+      statutoryRatesSetAt: statutory.configured ? statutory.updatedAt : null,
     },
   });
 });
