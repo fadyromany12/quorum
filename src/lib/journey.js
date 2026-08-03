@@ -101,7 +101,7 @@ const SECTIONS = [
     id: "work",
     label: "Working",
     phase: true,
-    tabs: ["floor", "wfm", "requests", "approvals", "log", "rta"],
+    tabs: ["floor", "exceptions", "wfm", "requests", "approvals", "log", "rta"],
   },
   {
     id: "grow",

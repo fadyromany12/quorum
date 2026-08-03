@@ -57,6 +57,7 @@ const ENTRIES = [
 
   // ── Working ──
   { tab: "floor", what: "Watch who is logged in, what state they are in, and who is over their break", where: "Live floor" },
+  { tab: "exceptions", what: "See who did not turn up, arrived late or left early — and log the case in one click", where: "Exceptions" },
   { tab: "requests", what: "Raise and track leave, overtime, transfers and HR letters", where: "Requests" },
   { tab: "approvals", what: "Decide what is waiting on you, including partial approvals", where: "My approvals" },
   { tab: "log", what: "Log an attendance or conduct event against someone", where: "Log an event" },

@@ -72,6 +72,7 @@ import RequestInbox from "./RequestInbox.jsx";
 import WfmPlanner from "./WfmPlanner.jsx";
 import Insights from "./Insights.jsx";
 import HelpDesk from "./HelpDesk.jsx";
+import Exceptions from "./Exceptions.jsx";
 import { navFor, sectionOfTab, stagesOf } from "../lib/journey.js";
 import { labelOf, dirFor } from "../lib/i18n.js";
 import { LocaleProvider } from "../hooks/useLocale.jsx";
@@ -83,6 +84,7 @@ const TAB_META = {
   dashboard: { label: "Overview", labelAr: "نظرة عامة", icon: LayoutDashboard },
   joining: { label: "New joiners", labelAr: "الملتحقون الجدد", icon: UserPlus },
   floor: { label: "Live floor", labelAr: "الأرضية المباشرة", icon: MonitorPlay },
+  exceptions: { label: "Exceptions", labelAr: "المخالفات الحضورية", icon: TriangleAlert },
   requests: { label: "Requests", labelAr: "الطلبات", icon: Scale },
   approvals: { label: "My approvals", labelAr: "موافقاتي", icon: CheckCheck, badge: "approvals" },
   log: { label: "Log an event", labelAr: "تسجيل واقعة", icon: ClipboardPlus },
@@ -151,6 +153,10 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
   const [acc, setAcc] = useState("All");
   const [range, setRange] = useState("all"); // all | 30 | month
   const [showForm, setShowForm] = useState(false);
+  /* An exception the lead chose to log, carried across the tab change. Cleared
+     as soon as the form takes it, so re-opening the form later does not
+     resurrect a case someone decided not to raise. */
+  const [logSeed, setLogSeed] = useState(null);
   const [logFilter, setLogFilter] = useState("all"); // all | review | open
   const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [query, setQuery] = useState("");
@@ -509,7 +515,7 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
             {tab === "log" && (
               <div className="grid gap-4">
                 {showForm && can(me, "log") ? (
-                  <LogForm data={data} defaultAccount={acc} onAdd={addEntry} onCancel={() => setShowForm(false)} />
+                  <LogForm data={data} defaultAccount={acc} seed={logSeed} onAdd={addEntry} onCancel={() => { setShowForm(false); setLogSeed(null); }} />
                 ) : (
                   !empty &&
                   can(me, "log") && (
@@ -695,6 +701,17 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
 
             {/* Live attendance, independent of the case ledger like the directory. */}
             {tab === "floor" && can(me, "floorView") && <FloorView accounts={data.accounts} />}
+
+            {/* Where the roster and the clock disagreed. "Log this" carries the
+                agent, the day and the matrix rule into the case form rather
+                than leaving the lead to retype all three — that retyping is
+                where the accuracy went. */}
+            {tab === "exceptions" && can(me, "floorView") && (
+              <Exceptions
+                accounts={data.accounts}
+                onLogCase={can(me, "log") ? (seed) => { setLogSeed(seed); goTab("log"); setShowForm(true); } : undefined}
+              />
+            )}
 
             {/* Approvals for every request type. Independent of the case ledger —
                 an org with no violations still has leave to approve. */}

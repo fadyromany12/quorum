@@ -43,20 +43,20 @@ export const TABS_FOR = {
      not in this list. The guide even told them where to go. A permission
      without a screen is not a smaller capability — it is an absent one. */
   SuperAdmin: [
-    "dashboard", "joining", "floor", "requests", "approvals", "log", "rta", "wfm",
+    "dashboard", "joining", "floor", "exceptions", "requests", "approvals", "log", "rta", "wfm",
     "triage", "agents", "leaving", "people", "roster", "insights", "audit",
     "helpdesk", "matrix", "users", "settings",
   ],
   /* WFM owns real-time adherence and the plan behind it. The planning screen is
      their primary one now — the floor tells them what is happening, the plan
      tells them what was supposed to. */
-  WFM: ["wfm", "floor", "rta"],
-  ProjectManager: ["dashboard", "joining", "floor", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster", "insights"],
-  OperationsLead: ["dashboard", "joining", "floor", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster", "insights"],
+  WFM: ["wfm", "floor", "exceptions", "rta"],
+  ProjectManager: ["dashboard", "joining", "floor", "exceptions", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster", "insights"],
+  OperationsLead: ["dashboard", "joining", "floor", "exceptions", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster", "insights"],
   /* HR owns both ends of the journey — admitting people and exiting them — so
      joining and leaving are theirs before anyone else's. */
   HRBusinessPartner: [
-    "dashboard", "joining", "floor", "requests", "approvals",
+    "dashboard", "joining", "floor", "exceptions", "requests", "approvals",
     "triage", "agents", "leaving", "people", "roster", "insights", "audit",
   ],
   /* IT exists to unlock people, and that is all. No directory, no cases, no

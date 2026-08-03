@@ -90,7 +90,7 @@ console.log("\n── Building a role's navigation ──");
   /* Navigation order is the journey's, not the role's — the tab list happens to
      name planning first, and the sidebar still shows the floor before it. */
   eq("all of them are there, in the navigation's order",
-    nav[0].items.map((i) => i.id), ["floor", "wfm", "rta"]);
+    nav[0].items.map((i) => i.id), ["floor", "exceptions", "wfm", "rta"]);
 }
 {
   const nav = J.navFor(A.TABS_FOR.HRBusinessPartner);

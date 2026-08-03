@@ -360,7 +360,13 @@ console.log("\n── RBAC + password hashing ──");
      reach the case pipeline, the directory, or anything about a person that is
      not their hours. The exact list is asserted rather than a length, because
      the failure worth catching is a screen quietly appearing in it. */
-  eq("WFM sees planning, the floor and the import, nothing else", TABS_FOR.WFM, ["wfm", "floor", "rta"]);
+  /* "exceptions" was added here deliberately, not absorbed. Attendance
+     exceptions are adherence — the same question the RTA import answers a day
+     late — and WFM already owns both the roster that says who should have been
+     there and the floor that says who was. The list stays exact so the next
+     addition has to argue for itself the same way. */
+  eq("WFM sees planning, the floor, exceptions and the import, nothing else",
+    TABS_FOR.WFM, ["wfm", "floor", "exceptions", "rta"]);
   eq("WFM cannot open the directory", TABS_FOR.WFM.includes("people"), false);
   eq("WFM still cannot touch cases", can({ role: "WFM" }, "caseWrite"), false);
   // Fleet-wide roles are unscoped by design: a WFM analyst usually has no direct
