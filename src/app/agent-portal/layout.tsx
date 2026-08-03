@@ -11,6 +11,8 @@ import SignOutButton from "@/components/portal/SignOutButton";
 import Logo from "@/components/Logo";
 import LangToggle from "@/components/LangToggle";
 import ThemeToggle from "@/components/ThemeToggle";
+import GuideButton from "@/components/GuideButton";
+import Tip from "@/components/ui/Tip";
 import { getThemeIntent } from "@/lib/theme-server";
 import { getLocale } from "@/lib/locale";
 import { dirFor, t } from "@/lib/i18n.js";
@@ -29,8 +31,13 @@ export default async function AgentPortalLayout({ children }: { children: ReactN
       <header className="flex flex-wrap items-center gap-3 py-6">
         <Logo size={32} subtitle={t(locale, "portal.subtitle")} />
         <span className="flex-1" />
-        <LangToggle locale={locale} />
-        <ThemeToggle initial={themeIntent} />
+        <GuideButton role="Agent" />
+        <Tip label="Switch between English and Arabic" side="bottom">
+          <LangToggle locale={locale} />
+        </Tip>
+        <Tip label="Switch between dark, light and following your system" side="bottom">
+          <ThemeToggle initial={themeIntent} />
+        </Tip>
         <GlassBadge tone="violet">
           <UserRound size={11} />
           {session.user.name}

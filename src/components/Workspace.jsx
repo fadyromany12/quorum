@@ -50,6 +50,8 @@ import { downloadCsv } from "../lib/csv.js";
 import { TABS_FOR, ROLE_LABEL, can } from "../lib/auth.js";
 
 import { TInput, BtnPrimary, BtnGhost, SectionTitle, Muted } from "./ui/index.jsx";
+import Tip from "./ui/Tip.jsx";
+import GuideButton from "./GuideButton.jsx";
 import LogForm from "./LogForm.jsx";
 import EntryCard from "./EntryCard.jsx";
 import Dashboard from "./Dashboard.jsx";
@@ -260,7 +262,10 @@ export default function Workspace({ initial, me, themeIntent }) {
           <div className="flex items-center gap-3 flex-wrap">
             <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org}`} />
             <span className="flex-1" />
-            <ThemeToggle initial={themeIntent} />
+            <GuideButton role={me.role} />
+            <Tip label="Switch between dark, light and following your system" side="bottom">
+              <ThemeToggle initial={themeIntent} />
+            </Tip>
             <UserChip me={me} onLogout={() => signOut({ callbackUrl: "/login" })} />
           </div>
 
@@ -371,9 +376,10 @@ export default function Workspace({ initial, me, themeIntent }) {
                   every screen, so it sets what the product appears to be about.
                   Conduct keeps a tile because it is real work; it is no longer
                   the first four. */}
-              <KPI label="Headcount" value={inPhase("work")} icon={Users} tone={P.petrol} />
+              <KPI label="Headcount" value={inPhase("work")} icon={Users} tone={P.petrol} hint="Everyone active on the floor right now — not counting joiners or leavers" />
               <KPI
                 label="Joining"
+                hint="Accepted offers, onboarding and anyone still inside probation"
                 value={inPhase("join")}
                 icon={UserPlus}
                 tone={inPhase("join") ? P.petrol : P.sub}
@@ -381,6 +387,7 @@ export default function Workspace({ initial, me, themeIntent }) {
               />
               <KPI
                 label="On a plan"
+                hint="People on a performance plan or suspended — the ones needing attention"
                 value={inPhase("grow")}
                 icon={TriangleAlert}
                 tone={inPhase("grow") ? P.amber : P.green}
@@ -388,6 +395,7 @@ export default function Workspace({ initial, me, themeIntent }) {
               />
               <KPI
                 label="Leaving"
+                hint="Serving notice — clearance is not finished until their last day"
                 value={headcount.Notice ?? 0}
                 icon={UserMinus}
                 tone={(headcount.Notice ?? 0) ? P.amber : P.green}
@@ -395,6 +403,7 @@ export default function Workspace({ initial, me, themeIntent }) {
               />
               <KPI
                 label="Open cases"
+                hint="Logged conduct or attendance cases nobody has reviewed yet"
                 value={pendingReview.length}
                 icon={Inbox}
                 tone={pendingReview.length ? P.brick : P.green}
@@ -402,6 +411,7 @@ export default function Workspace({ initial, me, themeIntent }) {
               />
               <KPI
                 label="Awaiting you"
+                hint="Decisions blocked on your sign-off — nothing moves until you act"
                 value={activeEscalations}
                 icon={CheckCheck}
                 tone={activeEscalations ? P.amber : P.green}
@@ -665,6 +675,7 @@ export default function Workspace({ initial, me, themeIntent }) {
           </button>
         </div>
       )}
+
     </div>
   );
 }
@@ -682,14 +693,15 @@ function UserChip({ me, onLogout }) {
           {ROLE_LABEL[me.role]}
         </div>
       </div>
-      <button
-        onClick={onLogout}
-        title="Sign out"
-        aria-label="Sign out"
-        style={{ border: "1px solid var(--hdr-line)", background: "transparent", color: "var(--hdr-text)", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
-      >
-        <LogOut size={13} />
-      </button>
+      <Tip label="Sign out" side="bottom">
+        <button
+          onClick={onLogout}
+          aria-label="Sign out"
+          style={{ border: "1px solid var(--hdr-line)", background: "transparent", color: "var(--hdr-text)", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
+        >
+          <LogOut size={13} />
+        </button>
+      </Tip>
     </div>
   );
 }
@@ -788,10 +800,11 @@ function NavChip({ item, active, badge, onClick }) {
 /* A scorecard figure. `value` is the raw number so it can count up; `format`
    renders it (hours, days…). Clickable cards lift, glow and nudge their icon —
    the whole tile reads as a control, not a label. */
-function KPI({ label, value, format, icon: Icon, tone, onClick }) {
+function KPI({ label, value, format, icon: Icon, tone, onClick, hint }) {
   const n = useCountUp(value);
   const shown = format ? format(n) : Math.round(n).toLocaleString();
   return (
+    <Tip label={hint} side="bottom" fill>
     <div
       onClick={onClick}
       role={onClick ? "button" : undefined}
@@ -818,8 +831,10 @@ function KPI({ label, value, format, icon: Icon, tone, onClick }) {
       </div>
       <div className="ao-disp uppercase tracking-wider font-semibold mt-1" style={{ fontSize: 10.5, color: P.sub }}>
         {label}
+        {hint ? <span className="sr-only"> — {hint}</span> : null}
       </div>
     </div>
+    </Tip>
   );
 }
 
