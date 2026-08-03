@@ -730,3 +730,26 @@ button:active:not(:disabled) { transform: scale(0.97); }
   .ao-tip-bubble { transition-duration: 1ms !important; }
   .ao-dialog[open] { animation-name: aoFade !important; }
 }
+
+/* ── Row density ──────────────────────────────────────────────────────────
+   A preference for the people who live in tables: the roster, the directory,
+   the audit trail. Comfortable spacing makes a form pleasant and costs a lead
+   scanning two hundred agents about a third of their rows, and rows below the
+   fold are rows nobody reads.
+
+   The declarations carry !important, which is deliberate and worth explaining.
+   Cell padding in this codebase is set inline on the components, and an inline
+   style beats every selector — so without it the preference would be silently
+   outvoted by the thing it is meant to override. The alternative was threading
+   a density prop through every table and rewriting some forty inline padding
+   values, which is a much larger change for exactly the same pixels and a lot
+   more places to get one wrong.
+
+   Scoped to table cells on purpose. Compacting cards and forms too would save
+   very little and make the dense mode feel cramped rather than efficient. */
+[data-density="compact"] td,
+[data-density="compact"] th {
+  padding-block: 3px !important;
+  padding-inline: 8px !important;
+  line-height: 1.35 !important;
+}

@@ -46,6 +46,7 @@ import { P, accColor, alpha } from "../lib/tokens.js";
 import { BRAND } from "../lib/brand";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
+import DensityToggle from "./DensityToggle";
 import { todayStr, daysAgo, monthOf } from "../lib/dates.js";
 import { fmtMin } from "../lib/format.js";
 import { statusOf, computeEscalations, countsForDiscipline } from "../lib/engine.js";
@@ -108,7 +109,7 @@ const TAB_META = {
    would be unreachable again by a different route. */
 const NAV_TOP = 118;
 
-export default function Workspace({ initial, me, themeIntent, locale = "en" }) {
+export default function Workspace({ initial, me, themeIntent, density, locale = "en" }) {
   const {
     data,
     error,
@@ -300,6 +301,11 @@ export default function Workspace({ initial, me, themeIntent, locale = "en" }) {
             <span className="flex-1" />
             <GuideButton role={me.role} />
             <Tip label="Switch between dark, light and following your system" side="bottom">
+              {/* Next to the theme because it is the same kind of thing: a
+                  preference about how the app looks to this person, stored the
+                  same way, and belonging wherever they already go to change
+                  one. */}
+              <DensityToggle initial={density} />
               <ThemeToggle initial={themeIntent} />
             </Tip>
             <UserChip me={me} onLogout={() => signOut({ callbackUrl: "/login" })} />

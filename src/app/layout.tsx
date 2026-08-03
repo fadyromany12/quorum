@@ -6,6 +6,7 @@ import { GeistMono } from "geist/font/mono";
 import { Space_Grotesk } from "next/font/google";
 import { BRAND } from "@/lib/brand";
 import { DEFAULT_THEME, isTheme, resolveTheme, NO_FLASH_SCRIPT } from "@/lib/theme.js";
+import { DENSITY_SCRIPT } from "@/lib/density.js";
 import "./globals.css";
 
 /* Ink & Signal type stack — self-hosted via next/font (no FOUT, no Google
@@ -32,7 +33,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" data-theme={resolveTheme(intent)} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: `${NO_FLASH_SCRIPT}\n${DENSITY_SCRIPT}` }} />
       </head>
       <body className={`${GeistSans.variable} ${GeistMono.variable} ${display.variable}`}>{children}</body>
     </html>
