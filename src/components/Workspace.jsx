@@ -8,7 +8,7 @@
    The glass restyle of these inner views rides on the shared kit later; the
    workspace keeps its proven light look for now, painted over the dark shell. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { signOut } from "next-auth/react";
 import {
@@ -99,6 +99,14 @@ const TAB_META = {
   users: { label: "Accounts", labelAr: "الحسابات", icon: UserCog },
   settings: { label: "Settings", labelAr: "الإعدادات", icon: Settings2 },
 };
+
+/* Where the sidebar starts, measured from the top of the window: the glass
+   header's height plus a little air. It is both the sticky offset and the
+   amount subtracted from the viewport to bound the sidebar's own height, and
+   those two must be the same number — if the offset were larger the list would
+   overflow past the bottom of the window, and the entries hidden down there
+   would be unreachable again by a different route. */
+const NAV_TOP = 118;
 
 export default function Workspace({ initial, me, themeIntent, locale = "en" }) {
   const {
@@ -257,6 +265,19 @@ export default function Workspace({ initial, me, themeIntent, locale = "en" }) {
 
   const nav = navFor(allowedTabs, TAB_META);
   const section = sectionOfTab(tab);
+
+  /* Keep the current screen visible inside its own scroller. Without this the
+     sidebar gains independent scrolling and immediately loses the one thing
+     the page scroll used to guarantee: that wherever you were, the highlighted
+     entry was somewhere you could see. Landing on a tab near the bottom — a
+     bookmark, a reload, a jump from a badge — would otherwise show a list
+     scrolled to the top with the selection off-screen below.
+
+     "nearest" rather than "center" so an entry already in view does not move. */
+  const navRef = useRef(null);
+  useEffect(() => {
+    navRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [tab]);
   // "people" is in this list for a different reason than the rest: the others
   // are admin screens, but the directory genuinely has its own data source and
   // is meaningful with an empty case ledger.
@@ -343,8 +364,30 @@ export default function Workspace({ initial, me, themeIntent, locale = "en" }) {
       )}
 
       <div className="mx-auto px-4 pb-16 flex gap-5 items-start" style={{ maxWidth: 1320 }}>
-        {/* ── Sidebar (sticks below the glass header) ── */}
-        <nav className="hidden md:block py-4" style={{ width: 190, flexShrink: 0, position: "sticky", top: 118 }}>
+        {/* ── Sidebar ──
+            Sticky pins the top of an element; it does nothing about its height.
+            A Super Admin's list is nineteen screens plus seven headings and a
+            button, which is taller than most viewports, so the last entries sat
+            below the fold and the only way to reach them was to scroll the
+            whole page — dragging the content you were reading out of view to
+            get at a menu. Two columns of different lengths need two scrollers.
+
+            So: bounded to the space between the header and the bottom of the
+            window, with its own overflow. overscroll-behavior keeps a flick at
+            the end of the list from carrying on into the page behind it. */}
+        <nav
+          ref={navRef}
+          className="hidden md:block py-4"
+          style={{
+            width: 190,
+            flexShrink: 0,
+            position: "sticky",
+            top: NAV_TOP,
+            maxHeight: `calc(100vh - ${NAV_TOP}px)`,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+          }}
+        >
           <div className="grid gap-3">
             {nav.map((s) => (
               <div key={s.id} className="grid gap-1">
