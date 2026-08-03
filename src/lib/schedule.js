@@ -346,3 +346,107 @@ export function absenceImpact({ plan, roster, employeeId, width = 30 }) {
     coverable: causedByThis === 0,
   };
 }
+
+/* ── Bulk application ───────────────────────────────────────────────────────
+
+   Building a month's roster one cell at a time is why rosters get built in
+   Excel and pasted in. This is the same operation the grid performs, expanded
+   across a set of people and a span of days.
+
+   Pure, and separated from the screen, because the arithmetic is where this
+   goes wrong: an off-by-one on the range writes a Saturday nobody works, and a
+   weekday filter applied in the wrong time zone shifts an entire month by a
+   day. Both are the kind of mistake that is invisible in a preview count and
+   obvious to the forty people who turn up. */
+
+/** Weekday indices as JavaScript reports them, named for the roster UI. */
+export const WEEKDAYS = [
+  { index: 0, short: "Sun", label: "Sunday" },
+  { index: 1, short: "Mon", label: "Monday" },
+  { index: 2, short: "Tue", label: "Tuesday" },
+  { index: 3, short: "Wed", label: "Wednesday" },
+  { index: 4, short: "Thu", label: "Thursday" },
+  { index: 5, short: "Fri", label: "Friday" },
+  { index: 6, short: "Sat", label: "Saturday" },
+];
+
+/**
+ * The dates in an inclusive range whose weekday is selected.
+ *
+ * Compared as UTC throughout. A yyyy-mm-dd string is a calendar date with no
+ * zone, and running it through a local Date makes the weekday depend on where
+ * the server happens to be — which is how a roster comes out shifted by one day
+ * for everybody.
+ *
+ * @param {string} from yyyy-mm-dd, inclusive
+ * @param {string} to   yyyy-mm-dd, inclusive
+ * @param {number[]} weekdays 0–6, Sunday first; empty means every day
+ * @returns {string[]}
+ */
+export function datesInRange(from, to, weekdays = []) {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
+  const wanted = weekdays.length ? new Set(weekdays) : null;
+  const out = [];
+  for (let t = start; t <= end; t += 86400000) {
+    const d = new Date(t);
+    if (wanted && !wanted.has(d.getUTCDay())) continue;
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+/** The most rows one request may carry — the API refuses more. */
+export const BULK_LIMIT = 500;
+
+/**
+ * Expand a bulk selection into roster rows, and say what is wrong with it.
+ *
+ * Returns the rows *and* the problems rather than throwing, because the caller
+ * is a preview: the point is to show someone what 240 rows would look like
+ * before they write any of them.
+ *
+ * @returns {{rows: object[], problems: string[], days: string[]}}
+ */
+export function bulkRows({ employeeIds = [], from, to, weekdays = [], pattern = null, activity = "Shift", note = "" }) {
+  const problems = [];
+  const days = datesInRange(from, to, weekdays);
+
+  if (!employeeIds.length) problems.push("Nobody is selected.");
+  if (!days.length) {
+    problems.push(
+      weekdays.length
+        ? "No days in that range fall on the selected weekdays."
+        : "That date range is empty or runs backwards.",
+    );
+  }
+
+  const covers = !!SCHEDULE_ACTIVITIES[activity]?.covers;
+  /* A covering activity needs a shape to be worked. A day off does not, and
+     demanding a pattern for one would make "give everyone Friday off" require
+     inventing a shift. */
+  if (covers && !pattern) problems.push(`${activity} needs a shift pattern — pick one, or choose an activity like Off.`);
+
+  const rows = [];
+  if (!problems.length) {
+    for (const employeeId of employeeIds) {
+      for (const date of days) {
+        rows.push(
+          covers
+            ? entryFromPattern(pattern, employeeId, date, { activity, note })
+            : { employeeId, date, activity, startTime: "", durationMinutes: 0, patternId: null, published: false, note },
+        );
+      }
+    }
+  }
+
+  if (rows.length > BULK_LIMIT) {
+    problems.push(
+      `That is ${rows.length} rows — more than the ${BULK_LIMIT} one save can carry. ` +
+        "Narrow the range or the group and repeat.",
+    );
+  }
+
+  return { rows, problems, days };
+}

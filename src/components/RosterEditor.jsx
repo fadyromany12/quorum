@@ -30,6 +30,8 @@ import Tip from "./ui/Tip.jsx";
 import { useLabels } from "../hooks/useLocale.jsx";
 
 /** The row as it exists before anyone has touched it. */
+import BulkRoster from "./BulkRoster.jsx";
+
 const EMPTY = { activity: "", patternId: "", startTime: "", durationMinutes: 0, published: false, id: null };
 
 const hours = (m) => `${Math.round((m / 60) * 10) / 10}h`;
@@ -184,6 +186,11 @@ export default function RosterEditor({ account, lob, date, onSaved }) {
           </BtnPrimary>
         </Tip>
       </div>
+
+      {/* The grid below edits one day. This edits a month — the same rows,
+          expanded across a group and a span, previewed before anything is
+          written. */}
+      <BulkRoster people={people} patterns={patterns} onApplied={load} />
 
       {error && (
         <div className="flex items-start gap-2 p-3" style={{ background: P.brickWash, border: `1px solid ${alpha(P.brick, 0.4)}`, borderRadius: 8 }} role="alert">

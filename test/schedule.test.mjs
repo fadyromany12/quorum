@@ -207,5 +207,49 @@ console.log("\n── What one absence does to the plan ──");
     S.absenceImpact({ plan: need, roster: booked, employeeId: "f" }).affected.length === 0);
 }
 
+
+console.log("\n── Bulk application ──");
+/* The arithmetic is where this goes wrong, and both failure modes are invisible
+   in a preview count: an off-by-one writes a day nobody works, and a weekday
+   filter resolved in local time shifts a whole month by one for everybody. */
+{
+  eq("an inclusive range includes both ends", S.datesInRange("2026-03-01", "2026-03-07").length, 7);
+  eq("a single day is one day", S.datesInRange("2026-03-05", "2026-03-05").length, 1);
+  eq("a backwards range is empty rather than infinite", S.datesInRange("2026-03-07", "2026-03-01"), []);
+  eq("an unparseable date is empty rather than NaN", S.datesInRange("nope", "2026-03-01"), []);
+
+  /* 2026-03-01 is a Sunday. Asserted as dates rather than a count, because a
+     count is equally happy with the whole week shifted by one. */
+  eq("weekday filtering picks the right dates",
+    S.datesInRange("2026-03-01", "2026-03-14", [0]), ["2026-03-01", "2026-03-08"]);
+  eq("and several weekdays together",
+    S.datesInRange("2026-03-01", "2026-03-07", [0, 3]), ["2026-03-01", "2026-03-04"]);
+  eq("no weekday filter means every day", S.datesInRange("2026-03-01", "2026-03-03", []).length, 3);
+
+  const pattern = { id: "p1", startTime: "09:00", durationMinutes: 480, paidBreakMinutes: 30, unpaidBreakMinutes: 60 };
+  const r = S.bulkRows({ employeeIds: ["a", "b"], from: "2026-03-01", to: "2026-03-03", pattern });
+  eq("two people over three days is six rows", r.rows.length, 6);
+  eq("nothing wrong with it", r.problems, []);
+  ok("and each row carries the pattern's shape",
+    r.rows.every((x) => x.startTime === "09:00" && x.durationMinutes === 480 && x.patternId === "p1"));
+
+  eq("a shift with no pattern is refused rather than written blank",
+    S.bulkRows({ employeeIds: ["a"], from: "2026-03-01", to: "2026-03-01" }).problems.length, 1);
+  ok("but a day off needs no pattern — otherwise giving everyone Friday off means inventing a shift",
+    S.bulkRows({ employeeIds: ["a"], from: "2026-03-01", to: "2026-03-01", activity: "Off" }).problems.length === 0);
+  eq("nobody selected is refused",
+    S.bulkRows({ employeeIds: [], from: "2026-03-01", to: "2026-03-01", pattern }).problems.length > 0, true);
+  ok("a weekday that never falls in the range says so, rather than writing nothing quietly",
+    S.bulkRows({ employeeIds: ["a"], from: "2026-03-02", to: "2026-03-03", weekdays: [6], pattern })
+      .problems.some((x) => /weekdays/i.test(x)));
+
+  /* The API refuses more than 500 in one request, so the planner has to notice
+     before the save does — a 403 after selecting eighty people is a worse way
+     to learn it. */
+  const big = S.bulkRows({ employeeIds: Array.from({ length: 40 }, (_, i) => `e${i}`), from: "2026-03-01", to: "2026-03-31", pattern });
+  ok(`${40 * 31} rows is over the limit and is caught here`, big.problems.some((x) => /more than the 500/.test(x)));
+  ok("and the rows are still returned so the preview can show the size", big.rows.length === 40 * 31);
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
