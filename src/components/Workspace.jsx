@@ -47,6 +47,7 @@ import { BRAND } from "../lib/brand";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import DensityToggle from "./DensityToggle";
+import InboxBell from "./InboxBell";
 import { todayStr, daysAgo, monthOf } from "../lib/dates.js";
 import { fmtMin } from "../lib/format.js";
 import { statusOf, computeEscalations, countsForDiscipline } from "../lib/engine.js";
@@ -307,6 +308,11 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
             <span className="flex-1" />
             <GuideButton role={me.role} />
             <Tip label="Switch between dark, light and following your system" side="bottom">
+              {/* The queue, visible from wherever you are. Clicking an entry
+                  goes to the screen that owns it rather than rendering the list
+                  twice. */}
+              <InboxBell onGo={(t) => allowedTabs.includes(t) && goTab(t)} />
+
               {/* Next to the theme because it is the same kind of thing: a
                   preference about how the app looks to this person, stored the
                   same way, and belonging wherever they already go to change
