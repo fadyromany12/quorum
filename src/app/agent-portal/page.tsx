@@ -12,6 +12,7 @@ import { GlassCard, GlassBadge, GlassStat, GlassProgress } from "@/components/gl
 import AckCenter from "@/components/portal/AckCenter";
 import AgentClock from "@/components/portal/AgentClock";
 import MyRequests from "@/components/portal/MyRequests";
+import MyPayslips from "@/components/portal/MyPayslips";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
 import { annualEntitlement } from "@/lib/employee.js";
@@ -78,6 +79,11 @@ export default async function AgentPortalPage() {
 
       {/* Leave: balance, request form, history — the approval engine's agent side. */}
       <MyRequests entitlementDays={entitlementDays} />
+
+      {/* Pay. Below the clock and leave because those are what an agent opens
+          this page to *use*; a payslip is something they come looking for once
+          a month and know exactly where to find. */}
+      <MyPayslips />
 
       {/* Pending acknowledgements — the alert + signature flow */}
       <AckCenter
