@@ -190,8 +190,12 @@ function EmployeeTable({ rows, nameById, sort, onSort, onOpen }) {
     borderBottom: `1px solid ${P.line}`, whiteSpace: "nowrap",
   };
 
+  /* minWidth: 0 for the same reason as the dashboard chart: a grid or flex
+     child will not shrink below its content, so without it this scroller is
+     widened to fit the 940px table rather than scrolling it — and the page
+     scrolls sideways instead of the table. */
   return (
-    <div style={{ overflowX: "auto", border: `1px solid ${P.line}`, borderRadius: 12, background: P.card }}>
+    <div style={{ overflowX: "auto", minWidth: 0, maxWidth: "100%", border: `1px solid ${P.line}`, borderRadius: 12, background: P.card }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 940 }}>
         <thead>
           <tr>

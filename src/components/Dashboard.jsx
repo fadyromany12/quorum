@@ -481,7 +481,13 @@ function TrendBars({ weekly }) {
   }
 
   return (
-    <div style={{ overflowX: "auto" }}>
+    /* minWidth: 0 is doing real work here, not tidying. A grid or flex child
+       defaults to min-width: auto, which means it refuses to shrink below its
+       content — so this scroller was widened to fit the 480px chart instead of
+       scrolling it, and the whole page scrolled sideways on a phone. The
+       overflow property was already right; the container simply could not get
+       small enough to need it. */
+    <div style={{ overflowX: "auto", minWidth: 0, maxWidth: "100%" }}>
       <svg viewBox={`0 0 ${W} ${H + 30}`} style={{ width: "100%", minWidth: 480 }} role="img" aria-label="Cases per week, last 8 weeks">
         {[0.25, 0.5, 0.75].map((f) => (
           <line key={f} x1={pad} x2={W - pad} y1={H - H * f} y2={H - H * f} stroke="var(--deep-well)" strokeWidth="1" />

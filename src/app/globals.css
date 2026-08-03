@@ -753,3 +753,45 @@ button:active:not(:disabled) { transform: scale(0.97); }
   padding-inline: 8px !important;
   line-height: 1.35 !important;
 }
+
+/* ── Touch ────────────────────────────────────────────────────────────────
+   Agents open this on a phone; leads open it on a tablet on the floor. Two
+   things behave differently there and both were visible in a 390px viewport.
+
+   Tooltips are hover affordances, and a device with no hover cannot dismiss
+   one. They were still in the layout on touch — the language toggle's bubble
+   was clipped against the right edge of the header, reading as a broken
+   control rather than as a tooltip nobody asked for. Hidden rather than
+   repositioned: the label is already on the button it describes, so on touch
+   the tooltip is pure cost.
+
+   Tap targets: the header controls render at 27px, which is fine for a mouse
+   and below what a thumb hits reliably. Raised on coarse pointers only, so the
+   desktop density everyone is used to is untouched. */
+@media (hover: none), (pointer: coarse) {
+  .ao-tip-bubble { display: none; }
+
+  header button,
+  header select,
+  header a[role="button"] {
+    min-height: 38px;
+  }
+}
+
+/* Let the content column actually shrink.
+
+   Every grid and flex child defaults to `min-width: auto`, meaning it refuses
+   to become narrower than its content. One 480px-wide chart inside a card
+   therefore widened the card, which widened the column, which widened the page
+   — and the whole workspace scrolled sideways on a phone to accommodate one
+   graph. The inner scrollers were already correct; nothing above them could get
+   small enough to hand them the overflow.
+
+   Scoped to the workspace shell rather than applied globally, because
+   min-width: auto is the right default almost everywhere else — it is what
+   stops a long word from being clipped out of existence. */
+.ao-body main,
+.ao-body main section,
+.ao-body main > * {
+  min-width: 0;
+}
