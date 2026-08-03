@@ -7,7 +7,7 @@
    text search. Nothing here mutates — the API has no write surface for it. */
 
 import { useEffect, useMemo, useState } from "react";
-import { ScrollText, Search, RefreshCw, Signature, Gavel, UploadCloud, UserCog, KeyRound, Settings2, Table2, Trash2, ClipboardPlus, Pencil, Bomb, LogIn, ShieldAlert, Ban, Archive, Scale } from "lucide-react";
+import { ScrollText, Search, RefreshCw, Signature, Gavel, UploadCloud, UserCog, KeyRound, Settings2, Table2, Trash2, ClipboardPlus, Pencil, Bomb, LogIn, ShieldAlert, Ban, Archive, Scale, IdCard, GitBranch, Eye, Lock } from "lucide-react";
 import { Card, Pill, Muted, BtnGhost } from "./ui/index.jsx";
 import { P } from "../lib/tokens.js";
 import { fmtStamp, plural } from "../lib/format.js";
@@ -34,6 +34,13 @@ const ACTIONS = {
   LOGIN_BLOCKED: { label: "Blocked", color: P.brick, icon: Ban },
   APPEAL_SUBMITTED: { label: "Appeal", color: P.amber, icon: Gavel },
   APPEAL_RESOLVED: { label: "Appeal ✓", color: P.petrol, icon: Scale },
+  EMPLOYEE_CREATED: { label: "Employee +", color: P.green, icon: IdCard },
+  EMPLOYEE_UPDATED: { label: "Employee Δ", color: P.sub, icon: IdCard },
+  EMPLOYEE_STAGE_CHANGED: { label: "Lifecycle", color: P.petrol, icon: GitBranch },
+  // Brick, not grey: a PII read is the highest-sensitivity event in the log and
+  // should be the first thing the eye lands on when scanning for it.
+  PII_READ: { label: "PII viewed", color: P.brick, icon: Eye },
+  PII_UPDATED: { label: "PII edited", color: P.amber, icon: Lock },
 };
 
 export default function AuditTrail() {

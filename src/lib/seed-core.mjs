@@ -6,8 +6,10 @@ import { DEFAULT_DCM } from "./dcm.js";
 import { DEFAULT_ACCOUNTS, DEFAULT_TLS } from "./constants.js";
 import { DEFAULT_PASSWORD } from "./auth.js";
 import { buildSamples } from "./samples.js";
+import { buildEmployeeSeed } from "./employee-samples.js";
 import { settleDeductions } from "./deductions.js";
 import { statusOf } from "./engine.js";
+import { probationEnd } from "./employee.js";
 
 export const SEED_USERS = [
   { name: "Fady Bekhet", email: "fady.bekhet@konecta.com", role: "SuperAdmin" },
@@ -39,10 +41,88 @@ function toRow(e) {
   };
 }
 
+/**
+ * The demo org chart, in three passes.
+ *
+ * Manager links are declared by email in the fixture, so the rows have to exist
+ * before they can point at each other — resolving ids up front would force the
+ * fixture to be written in insertion order rather than as an org chart. The
+ * third pass attaches logins where a User with the same email exists.
+ */
+async function seedEmployees(prisma, { actorName, actorRole }) {
+  const fixture = buildEmployeeSeed();
+
+  await prisma.employee.createMany({
+    data: fixture.map(({ _managerEmail, _functionalEmail, ...e }) => ({
+      ...e,
+      // Derived here so the seeded records match what createEmployee would
+      // have produced, rather than carrying blank confirmation dates.
+      probationEnd: e.hireDate ? probationEnd(e.hireDate) : "",
+    })),
+  });
+
+  const rows = await prisma.employee.findMany({ select: { id: true, workEmail: true, stage: true, hireDate: true, jobTitle: true, department: true, account: true } });
+  const idByEmail = new Map(rows.map((r) => [r.workEmail, r.id]));
+
+  for (const e of fixture) {
+    const directManagerId = e._managerEmail ? idByEmail.get(e._managerEmail) ?? null : null;
+    const functionalManagerId = e._functionalEmail ? idByEmail.get(e._functionalEmail) ?? null : null;
+    if (!directManagerId && !functionalManagerId) continue;
+    await prisma.employee.update({
+      where: { workEmail: e.workEmail },
+      data: { directManagerId, functionalManagerId },
+    });
+  }
+
+  const users = await prisma.user.findMany({ select: { id: true, email: true } });
+  for (const u of users) {
+    const employeeId = idByEmail.get(u.email);
+    if (employeeId) await prisma.employee.update({ where: { id: employeeId }, data: { userId: u.id } });
+  }
+
+  /* Seed the timeline too. A profile whose history starts the day the database
+     was created looks broken; the hire event is the one thing every record has. */
+  await prisma.employeeEvent.createMany({
+    data: rows.map((r) => ({
+      employeeId: r.id,
+      at: r.hireDate ? new Date(`${r.hireDate}T09:00:00Z`) : new Date(),
+      effectiveDate: r.hireDate,
+      type: r.stage === "Applicant" ? "NOTE" : "HIRED",
+      title: r.stage === "Applicant" ? "Application received" : "Joined the company",
+      detail: [r.jobTitle, r.department, r.account].filter(Boolean).join(" · "),
+      /* Deliberately no toVal. The seed knows each employee's *current* stage,
+         not the stage they were hired into — writing today's stage onto a
+         backdated hire event would claim someone was hired straight onto a PIP.
+         createEmployee does record toVal, because there the two genuinely
+         coincide. */
+      actorName,
+      actorRole,
+    })),
+  });
+
+  return rows.length;
+}
+
 /** Wipes every app table and reseeds. Returns a summary for logging. */
 export async function seedAll(prisma, { actorName = "system", actorRole = "SuperAdmin" } = {}) {
+  /* Order matters: EmployeeEvent and EmployeePII cascade from Employee, but
+     Employee's own self-relations do not, so its rows go before User's (which
+     Employee.userId points at with SetNull). */
   await prisma.$transaction([
     prisma.auditLog.deleteMany(),
+    // Delegation carries plain ids, not relations, so nothing cascades it —
+    // without this line a reseed leaves orphaned delegations that silently
+    // route new approvals to employees who no longer exist.
+    prisma.delegation.deleteMany(),
+    prisma.requestStep.deleteMany(),
+    prisma.request.deleteMany(),
+    prisma.leaveLedgerEntry.deleteMany(),
+    prisma.attendanceEvent.deleteMany(),
+    prisma.compensationRecord.deleteMany(),
+    prisma.employeeEvent.deleteMany(),
+    prisma.employeePII.deleteMany(),
+    prisma.dependent.deleteMany(),
+    prisma.employee.deleteMany(),
     prisma.case.deleteMany(),
     prisma.dcmRule.deleteMany(),
     prisma.appConfig.deleteMany(),
@@ -62,7 +142,11 @@ export async function seedAll(prisma, { actorName = "system", actorRole = "Super
   }));
   await prisma.case.createMany({ data: rows });
 
-  const summary = `Database seeded: ${SEED_USERS.length} users, ${DEFAULT_DCM.length} DCM rules, ${rows.length} cases.`;
+  const employees = await seedEmployees(prisma, { actorName, actorRole });
+
+  const summary =
+    `Database seeded: ${SEED_USERS.length} users, ${employees} employees, ` +
+    `${DEFAULT_DCM.length} DCM rules, ${rows.length} cases.`;
   await prisma.auditLog.create({
     data: { actorName, actorRole, action: "FACTORY_RESET", summary },
   });

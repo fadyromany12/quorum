@@ -11,10 +11,10 @@ import AgentSnapshot from "./AgentSnapshot.jsx";
 import { P } from "../lib/tokens.js";
 import { todayStr } from "../lib/dates.js";
 import { uid } from "../lib/format.js";
-import { verdictFor } from "../lib/engine.js";
+import { verdictFor, findRule } from "../lib/engine.js";
 import { agentSummary } from "../lib/agents.js";
 import { agentMatches } from "../lib/identity.js";
-import { LOBS } from "../lib/constants.js";
+import { lobsFor } from "../lib/org.js";
 
 const blank = (accounts, tls, defaultAccount) => ({
   account: defaultAccount && defaultAccount !== "All" ? defaultAccount : accounts[0] || "",
@@ -34,8 +34,27 @@ const blank = (accounts, tls, defaultAccount) => ({
   notes: "",
 });
 
-export default function LogForm({ data, onAdd, onCancel, defaultAccount }) {
-  const [f, setF] = useState(() => blank(data.accounts, data.tls, defaultAccount));
+/* A case pre-filled from an attendance exception.
+
+   The seed carries the matrix rule as an *id*, and the form works in names —
+   so it is resolved through findRule rather than pasted in. A renamed violation
+   then still matches, and one that has genuinely been removed leaves the picker
+   empty instead of putting a name in it that the matrix no longer knows. */
+const fromSeed = (base, seed, dcm) => {
+  if (!seed) return base;
+  const rule = seed.violationId ? findRule(dcm, { id: seed.violationId }) : null;
+  return {
+    ...base,
+    account: seed.account || base.account,
+    date: seed.date || base.date,
+    empId: seed.empId || base.empId,
+    agentName: seed.name || base.agentName,
+    violation: rule?.name ?? base.violation,
+  };
+};
+
+export default function LogForm({ data, onAdd, onCancel, defaultAccount, seed = null }) {
+  const [f, setF] = useState(() => fromSeed(blank(data.accounts, data.tls, defaultAccount), seed, data.dcm));
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
 
   // Agents are matched by employee ID or email — either one identifies them.
@@ -149,7 +168,9 @@ export default function LogForm({ data, onAdd, onCancel, defaultAccount }) {
           <Field label="Line of business">
             <TSelect value={f.lob} onChange={(e) => set("lob", e.target.value)}>
               <option value="">—</option>
-              {LOBS.map((l) => (
+              {/* Only the lines this account actually has — a shared list used
+                  to offer Hertz a line that exists only on Lenovo. */}
+              {lobsFor(data.org, f.account).map((l) => (
                 <option key={l}>{l}</option>
               ))}
             </TSelect>

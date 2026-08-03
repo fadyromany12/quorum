@@ -16,9 +16,31 @@ const PSQL = process.env.PGBIN
   : process.platform === "win32"
     ? "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe"
     : "psql";
+/* Connection details come from DATABASE_URL, the same string the app is using,
+   with the historical local defaults as a fallback. Hardcoding them meant this
+   suite could verify a different database than the one under test and report a
+   confident pass on rows nobody had written — the failure is silent and looks
+   exactly like success. */
+const DB = (() => {
+  const fallback = { host: "localhost", port: "5544", user: "postgres", name: "absence_ops", password: "" };
+  try {
+    const u = new URL(process.env.DATABASE_URL ?? "");
+    return {
+      host: u.hostname || fallback.host,
+      port: u.port || "5432",
+      user: decodeURIComponent(u.username) || fallback.user,
+      name: u.pathname.replace(/^\//, "") || fallback.name,
+      password: decodeURIComponent(u.password || ""),
+    };
+  } catch {
+    return fallback;
+  }
+})();
+
 const sql = (q) =>
-  execFileSync(PSQL, ["-h", "localhost", "-p", "5544", "-U", "postgres", "-d", "absence_ops", "-tAc", q], {
+  execFileSync(PSQL, ["-h", DB.host, "-p", DB.port, "-U", DB.user, "-d", DB.name, "-tAc", q], {
     encoding: "utf8",
+    env: { ...process.env, ...(DB.password ? { PGPASSWORD: DB.password } : {}) },
   }).trim();
 
 let pass = 0, fail = 0;
@@ -92,7 +114,13 @@ ok("re-login with new password works, mustChange cleared", fady.session?.user?.m
   const r = await req(fady.jar, "/workspace");
   ok("workspace renders for staff", r.status === 200);
   const html = await r.text();
-  ok("workspace carries server data (triage gate present)", html.includes("Triage gate") || html.includes("TRIAGE"));
+  ok("workspace renders the journey navigation", html.includes("Case review"));
+  /* The previous version of this checked for a nav label and called it "carries
+     server data", which a hard-coded menu entry proves nothing about. The
+     account names come from AppConfig, so they are only in the HTML if the
+     server actually read the database. */
+  ok("workspace carries server data (accounts read from the database)",
+    /Hertz/.test(html) && /Lenovo/.test(html), html.slice(0, 200));
 }
 
 /* ── 2. HR finalization sets the acknowledgement flag ───────────────────── */

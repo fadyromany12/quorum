@@ -15,12 +15,17 @@ datasource db {
   provider = "postgresql"
 }
 
+// Mirrors ROLES in src/lib/auth.js. The two must agree: auth.js decides what a
+// role may do, this decides whether the row can exist at all, and a role in one
+// but not the other is a login that cannot be created or a permission map with
+// a dead entry.
 enum Role {
   SuperAdmin
   HRBusinessPartner
   OperationsLead
   ProjectManager
   WFM
+  ITSupport
   Agent
 }
 
@@ -30,6 +35,49 @@ enum CaseStage {
   review
   active
   dismissed
+}
+
+// Where an employee sits in their lifecycle. Deliberately one dimension: an
+// employee is in exactly one stage at a time, and every transition is an
+// EmployeeEvent. "Applicant" exists so an intake form can be captured before
+// anyone approves it — the record is real, the person just isn't staff yet.
+enum EmploymentStage {
+  Applicant
+  Onboarding
+  Probation
+  Active
+  OnPip
+  Suspended
+  Notice
+  Exited
+}
+
+enum ExitType {
+  Resignation
+  Termination
+  EndOfContract
+  Retirement
+  Abandonment
+}
+
+enum ManagerKind {
+  Direct
+  Functional
+  Dotted
+}
+
+// Why a compensation record exists. Drives the timeline wording, and separates
+// a genuine change from a fix to a previously mis-entered one — arrears are owed
+// for a Correction and not for a Merit increase, so the two must be
+// distinguishable without reading a free-text note.
+enum PayChangeReason {
+  Hire
+  Promotion
+  Merit
+  Adjustment
+  Demotion
+  Transfer
+  Correction
 }
 
 model User {
@@ -46,7 +94,12 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  auditLogs AuditLog[]
+  auditLogs      AuditLog[]
+  // The employment record behind this login, once one exists. Optional in both
+  // directions: applicants have no login, and service accounts have no
+  // employment record.
+  employee       Employee?
+  passwordResets PasswordReset[]
 }
 
 model Case {
@@ -147,6 +200,504 @@ model Case {
   @@index([account, date])
 }
 
+// ─── Employee master record ──────────────────────────────────────────────────
+//
+// The spine of the system: one row per person, from intake to exit. Everything
+// else (cases, leave, coaching, pay) hangs off this and is reconstructable as a
+// timeline via EmployeeEvent.
+//
+// Identity is split deliberately. Employee holds what a team lead legitimately
+// needs to do their job. EmployeePII holds government identifiers and bank
+// details in a separate table so reads can be permission-gated and audited
+// independently — a lead can see who reports to them without ever being able
+// to pull an IBAN.
+model Employee {
+  id    String @id @default(cuid())
+  // Human-facing payroll identifier, e.g. "EMP-1001". The format is company
+  // policy (see EMP_ID_POLICY); this column only guarantees uniqueness, because
+  // a real deployment carries historical ids in whatever scheme preceded it.
+  // Never reused — payroll and disciplinary history point at it.
+  empId String @unique
+
+  // Bilingual by requirement, not decoration: Egyptian payroll, social
+  // insurance and bank files are filed in Arabic, everything operational is in
+  // English. Both are authoritative for different systems.
+  fullNameEn    String
+  fullNameAr    String @default("")
+  preferredName String @default("")
+
+  workEmail     String @unique
+  personalEmail String @default("")
+  phone         String @default("")
+  gender        String @default("") // Male | Female | Undisclosed
+  birthDate     String @default("") // YYYY-MM-DD, calendar day (see Case.date)
+  addressAr     String @default("")
+  linkedInUrl   String @default("")
+
+  // Placement. account/lob mirror Case so violation history joins cleanly.
+  jobTitle   String @default("")
+  department String @default("")
+  account    String @default("")
+  lob        String @default("")
+  grade      String @default("")
+  workSite   String @default("")
+
+  // Reporting lines. Three separate links because BPO org charts genuinely
+  // need them: the Direct manager owns the person, the Functional manager owns
+  // the client account, and Dotted is advisory. Leave approval routes through
+  // Functional first when it differs from Direct.
+  directManagerId     String?
+  directManager       Employee?  @relation("DirectReports", fields: [directManagerId], references: [id], onDelete: SetNull)
+  directReports       Employee[] @relation("DirectReports")
+  functionalManagerId String?
+  functionalManager   Employee?  @relation("FunctionalReports", fields: [functionalManagerId], references: [id], onDelete: SetNull)
+  functionalReports   Employee[] @relation("FunctionalReports")
+  dottedManagerId     String?
+  dottedManager       Employee?  @relation("DottedReports", fields: [dottedManagerId], references: [id], onDelete: SetNull)
+  dottedReports       Employee[] @relation("DottedReports")
+
+  // Lifecycle. hireDate drives leave accrual tiers and probation; both are
+  // calendar days, for the same timezone reasons as Case.date.
+  stage        EmploymentStage @default(Applicant)
+  hireDate     String          @default("")
+  probationEnd String          @default("")
+  exitDate     String          @default("")
+  exitType     ExitType?
+  exitReason   String          @default("")
+
+  // Equipment issued at onboarding, e.g. ["Laptop","MiFi","Voice Line"].
+  // Recorded here so offboarding can assert every item came back.
+  assets Json @default("[]")
+
+  // Optional login. Not every employee has one (an applicant never does), and
+  // deleting a login must not delete the employment record — hence SetNull.
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  pii          EmployeePII?
+  dependents   Dependent[]
+  events       EmployeeEvent[]
+  compensation CompensationRecord[]
+  attendance   AttendanceEvent[]
+  requests     Request[]            @relation("RequestSubject")
+  leaveLedger  LeaveLedgerEntry[]
+  clearance    ClearanceStep[]
+  training     TrainingRecord[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  scheduleEntries ScheduleEntry[]
+
+  @@index([stage])
+  @@index([account, stage])
+  @@index([directManagerId])
+  @@index([fullNameEn])
+}
+
+// Government identifiers, banking and next-of-kin. Split from Employee so the
+// API can gate it behind one explicit permission and audit every read.
+//
+// NOTE: stored as plaintext at this step. Field-level encryption lands as its
+// own change so the key requirement is explicit and independently testable —
+// see docs. Do not treat this table as safe to expose.
+model EmployeePII {
+  employeeId String   @id
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  nationalId        String @default("") // Egyptian NID, 14 digits
+  passportNumber    String @default("")
+  socialInsuranceNo String @default("")
+
+  bankName      String @default("")
+  swiftCode     String @default("")
+  accountNumber String @default("")
+  iban          String @default("")
+
+  maritalStatus String @default("")
+  marriageDate  String @default("")
+
+  emergencyName     String @default("")
+  emergencyPhone    String @default("")
+  emergencyRelation String @default("")
+
+  // Pointers to documents held in Drive/storage — the app stores the location,
+  // never the file, same convention as Case.evidenceUrl.
+  photoUrl          String @default("")
+  nationalIdScanUrl String @default("")
+  offerLetterUrl    String @default("")
+  marriageCertUrl   String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Family members, for medical enrolment. A real table rather than a JSON blob:
+// a blob cannot be queried for insurance headcount, cannot be constrained, and
+// hides its own corruption until someone reads it back.
+model Dependent {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  name           String
+  relation       String  @default("") // Spouse | Son | Daughter | Parent
+  birthDate      String  @default("")
+  nationalId     String  @default("")
+  medicalCovered Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+}
+
+// ─── Effective-dated compensation ────────────────────────────────────────────
+//
+// Pay is never updated in place. A change inserts a new version stamped with the
+// day it takes effect, and the series is the history — see src/lib/effective.js
+// for the full rationale and src/lib/comp.js for the money rules.
+//
+// Two dates, deliberately:
+//   effectiveFrom — when the figure applies in the world (a calendar day)
+//   recordedAt    — when this system was told (an instant)
+// A raise agreed in March and backdated to January has both, and payroll needs
+// both: January to compute what should have been paid, March to explain why the
+// arrears land in the March run. Conflating them makes retroactive corrections
+// unrepresentable.
+//
+// There is no effectiveTo. A version's validity ends where the next one begins,
+// so overlaps and gaps are impossible by construction rather than by constraint.
+// End dates are derived for display, never stored.
+//
+// Two versions may share an effectiveFrom; the later-recorded one governs. That
+// is how a wrong figure is corrected without destroying the evidence it was once
+// believed. Nothing is deleted — `voided` retracts an entry that should never
+// have existed.
+model CompensationRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  effectiveFrom String   @default("") // YYYY-MM-DD, calendar day (see Case.date)
+  recordedAt    DateTime @default(now())
+
+  // Decimal, not Float: money in binary floating point accumulates error, and
+  // an employee's salary is the last place to discover that. Scale 2 covers
+  // piastres; scale 14 leaves ample headroom for any currency.
+  baseSalary Decimal @db.Decimal(14, 2)
+  currency   String  @default("EGP")
+
+  reason PayChangeReason
+  note   String          @default("")
+
+  // Retraction, not deletion. A voided version is excluded from every
+  // calculation but stays readable, because "this figure was once believed" is
+  // itself a fact a payroll dispute may turn on.
+  voided Boolean @default(false)
+
+  actorName String @default("")
+  actorRole String @default("")
+
+  // Resolving "salary as of D" walks this employee's versions in date order,
+  // which is exactly what this index serves.
+  @@index([employeeId, effectiveFrom])
+  @@index([employeeId, recordedAt])
+}
+
+enum PunchType {
+  LOGIN
+  LOGOUT
+  AUX
+}
+
+// ─── Requests and approvals ──────────────────────────────────────────────────
+//
+// One table for every request type — leave, overtime, transfer, resignation,
+// termination, no-show, pay change, letter. The rules live in
+// src/lib/workflow.js; per-type configuration there supplies the chain, the SLA
+// and the validation, so adding a type needs no migration.
+//
+// Note what is *not* here: a status column. Status is derived from the steps
+// (workflow.statusOf), because a status column and a step list can disagree, and
+// when they do it is the column that gets trusted and the steps that are right.
+//
+// `settledAt` is the one exception, and is not the same thing: a single nullable
+// instant meaning "no longer pending". It exists so "what is open?" is one
+// indexed predicate rather than a full scan — but it says only *whether* the
+// request is settled, never *how*, so it cannot contradict the steps.
+model Request {
+  id   String @id @default(cuid())
+  type String // leave | overtime | resignation | transfer | termination | noShow | payChange | letterRequest
+
+  // Who the request is about, and who raised it. Usually the same person, but
+  // not always: a manager raises a termination, and anyone may report a no-show.
+  subjectId  String
+  subject    Employee @relation("RequestSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  raisedById String
+  raisedOn   String   @default("") // YYYY-MM-DD, calendar day
+
+  // Type-specific fields. JSON on purpose: each type has a different shape, and
+  // a column per type would leave the table mostly null. Nothing here is
+  // queried — the indexed facts are all real columns.
+  payload Json @default("{}")
+
+  // For partial-capable types (leave in days, overtime in hours). Decimal
+  // rather than Int because half-days are ordinary.
+  requestedUnits Decimal? @db.Decimal(8, 2)
+
+  // For co-approval types: the value both approvers must agree on, seeded with
+  // what the requester proposed. That proposal is also the timeout default.
+  proposedValue String @default("")
+
+  settledAt      DateTime?
+  withdrawnAt    DateTime?
+  autoResolvedAt DateTime?
+
+  steps RequestStep[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The two questions asked constantly: "what is open?" and "what is open for
+  // this person?"
+  @@index([settledAt])
+  @@index([subjectId, settledAt])
+  @@index([raisedById, settledAt])
+  @@index([type, settledAt])
+}
+
+// One approver's slot in a request's chain. Ordered groups: every step sharing
+// an `order` is one unit of work, decided together (co-approval) or by whichever
+// approver acts first (`any`).
+model RequestStep {
+  id        String  @id @default(cuid())
+  requestId String
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  order      Int
+  kind       String // sequential | co | any
+  approverId String
+  // pending | approved | rejected | skipped. "skipped" is a step made
+  // irrelevant by someone else's decision — distinct from "rejected", because
+  // the approver never acted.
+  state      String @default("pending")
+
+  decidedAt   DateTime?
+  decidedById String?
+  note        String    @default("")
+
+  // Set when an approver grants fewer units than requested. The effective grant
+  // is the minimum across approvers, computed in the engine.
+  grantedUnits  Decimal? @db.Decimal(8, 2)
+  // This approver's proposal, for co-approval types. Agreement means every
+  // approver approved *and* proposed the same value.
+  proposedValue String   @default("")
+
+  createdAt DateTime @default(now())
+
+  // Drives the inbox: "which steps are waiting on me?"
+  @@index([approverId, state])
+  @@index([requestId, order])
+}
+
+// Standing or dated authority for one person to approve on another's behalf.
+//
+// Not an edge case: an approver going on leave and silently stalling everything
+// behind them is the most common complaint about systems like this. Blank dates
+// mean a standing arrangement that runs until revoked, which is the normal shape
+// for a permanent deputy.
+model Delegation {
+  id         String @id @default(cuid())
+  approverId String
+  delegateId String
+
+  // YYYY-MM-DD, both optional. Empty `from` means "already in force"; empty
+  // `to` means "until revoked".
+  from String @default("")
+  to   String @default("")
+
+  // Revoked rather than deleted: which decisions were taken under a delegation
+  // is part of the audit story.
+  revoked Boolean @default(false)
+  note    String  @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([approverId, revoked])
+  @@index([delegateId, revoked])
+}
+
+// ─── Attendance: login / logout / AUX ────────────────────────────────────────
+//
+// The agent clock. Strictly append-only: there is no "current status" column
+// anywhere, because the current state is derived from the last event (see
+// src/lib/attendance.js). That is deliberate, not stylistic —
+//
+//   · Concurrency: a double-tap, a retried request after a timeout, or a second
+//     browser tab cannot corrupt a state they only append to. A read-modify-write
+//     on a status column loses one of them silently, and at shift change that is
+//     hundreds of agents punching in the same minute.
+//   · Disputes: "you were on break for 40 minutes" must be answerable with the
+//     actual sequence months later, not with a number nobody can re-derive.
+//   · Rule changes: when a break policy changes, history is replayed under the
+//     new rule instead of being wrong or needing a migration.
+//
+// `at` is an instant and is assigned by the server. A client clock is never
+// trusted: it can be wrong by hours, and it can be set deliberately. Local
+// calendar days are derived from the instant in the operating time zone —
+// Egypt observes DST again, so a fixed UTC offset would be an hour out twice a
+// year and would mis-bucket overnight shifts.
+model AttendanceEvent {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  at   DateTime
+  type PunchType
+  // Set for AUX events, and optionally on LOGIN to start in a state other than
+  // Available. Validated against AUX_CODES in the engine rather than as an enum,
+  // so an operation can add a code without a migration.
+  aux  String    @default("")
+
+  // agent | supervisor | system. A system logout closes an abandoned session and
+  // is not the agent's doing — adherence must not punish the two identically.
+  source String @default("agent")
+  note   String @default("")
+
+  // Who punched, when that is not the subject: a supervisor punching on an
+  // agent's behalf is a legitimate operation and must be attributable.
+  actorName String @default("")
+  actorRole String @default("")
+
+  createdAt DateTime @default(now())
+
+  // Deriving state means reading one employee's events in time order.
+  @@index([employeeId, at])
+  // Real-time floor view: everyone's recent activity.
+  @@index([at])
+}
+
+// ─── The leave ledger ────────────────────────────────────────────────────────
+//
+// A balance is never a column; it is the sum of this table. Accruals credit,
+// grants debit, and the rows are the explanation an employee is shown when they
+// ask why the number is what it is. Append-only: an entry entered in error is
+// countered by a reversal, and both stay readable.
+//
+// Idempotency is structural, not procedural. An accrual is unique per
+// (employee, type, monthKey), so the monthly job can run twice — or catch up
+// after months of not running — and converge on the same ledger. A grant is
+// unique per requestId, so a retried settlement cannot debit twice. monthKey
+// is nullable rather than defaulted: Postgres treats NULLs as distinct, which
+// is exactly what lets non-accrual rows coexist under the same constraint.
+model LeaveLedgerEntry {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  at            DateTime @default(now())
+  effectiveDate String   @default("") // the day it applies, not the day it was written
+
+  type String // accrual | grant | adjustment | expiry | reversal
+  days Decimal @db.Decimal(6, 2) // signed: accruals +, grants −
+
+  monthKey  String? // YYYY-MM, accruals only
+  requestId String? @unique // grants only: one debit per settled request
+
+  note      String @default("")
+  actorName String @default("")
+
+  @@unique([employeeId, type, monthKey])
+  @@index([employeeId, at])
+}
+
+// ─── Exit clearance ──────────────────────────────────────────────────────────
+// Sequenced steps with dependencies: equipment cannot be collected before the
+// handover is confirmed. Rows are created when an exit is recorded; the pure
+// rules (src/lib/clearance.js) decide what may be ticked when.
+model ClearanceStep {
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  key        String // handover | it-assets | facilities | finance | hr-final
+  label      String
+  owner      String    @default("") // which function ticks it, for display
+  dependsOn  String    @default("") // a step key, or "*" for "everything else"
+  state      String    @default("pending") // pending | done
+  doneByName String    @default("")
+  doneAt     DateTime?
+  note       String    @default("")
+
+  @@unique([employeeId, key])
+}
+
+// What someone has been trained on. The middle of the journey that was modelled
+// in the taxonomy and stored nowhere.
+//
+// No `expiresOn` column, deliberately: expiry is a function of the completion
+// date and the type's validity period, so it is correct on read whether or not
+// any scheduled job has run. A stored expiry is wrong from midnight until
+// something fixes it, and the thing that would fix it is the job you cannot
+// depend on.
+model TrainingRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  type  String // a TRAINING_TYPES code — see src/lib/taxonomy.js
+  state String @default("planned") // planned | inProgress | completed | failed | cancelled
+
+  plannedOn   String @default("") // YYYY-MM-DD
+  completedOn String @default("") // set only when state is completed
+  score       String @default("") // free-form: "82%", "Pass", ""
+  provider    String @default("")
+  note        String @default("")
+
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One live record per person per course. A retake supersedes rather than
+  // duplicates, so "is this person certified" has one answer — history stays on
+  // the timeline, which is where history belongs.
+  @@unique([employeeId, type])
+  @@index([employeeId])
+}
+
+// The employee's timeline: one append-only row per thing that happened to them.
+// Distinct from AuditLog on purpose — AuditLog answers "who touched the
+// system", this answers "what happened to this person". A promotion belongs in
+// an HR record forever; a failed login does not.
+model EmployeeEvent {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  at            DateTime @default(now())
+  // The calendar day the change takes effect, which is not always the day it
+  // was entered — backdated hires and future-dated promotions are routine.
+  effectiveDate String   @default("")
+
+  // HIRED | STAGE_CHANGED | PROMOTED | PAY_CHANGED | TRANSFERRED | MANAGER_CHANGED
+  // | LEAVE_APPROVED | VIOLATION_LOGGED | COACHING_LOGGED | PIP_OPENED
+  // | PIP_CLOSED | ASSET_ISSUED | ASSET_RETURNED | EXITED | NOTE
+  type    String
+  title   String
+  detail  String @default("")
+  fromVal String @default("")
+  toVal   String @default("")
+
+  actorName String  @default("")
+  actorRole String  @default("")
+  caseId    String?
+  meta      Json    @default("{}")
+
+  @@index([employeeId, at])
+  @@index([type])
+}
+
 // The editable Disciplinary Consequences Matrix. Seeded with the 35-violation
 // default; only SuperAdmin may write (enforced in the API layer).
 model DcmRule {
@@ -167,6 +718,56 @@ model AppConfig {
   id       Int  @id @default(1)
   accounts Json // ["Hertz", "Lenovo", "Beko"]
   tls      Json // team-lead display names
+
+  // Payroll rates: { configured, socialInsuranceRate, taxRate, note, updatedBy }.
+  // Nullable rather than defaulted, and read as "not configured" when absent —
+  // a defaulted 0 would make every payslip print a zero tax line that looks
+  // computed. Json rather than columns because these are a set of rates that
+  // will grow (brackets, employer share, allowances) and each addition should
+  // not be a migration on a table with one row.
+  payroll Json?
+}
+
+// ─── Password reset ──────────────────────────────────────────────────────────
+//
+// One row per request, never per code: the code itself is stored only as a
+// hash, so reading this table hands over no live resets. Rows are kept after
+// use rather than deleted — "who asked for a reset, when, and did they redeem
+// it" is exactly the history an account-takeover investigation needs, and a
+// table that tidies itself up cannot answer it.
+model PasswordReset {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // sha256 of the normalised code. Not bcrypt: the code is high-entropy and
+  // single-use with a 20-minute life, so the work factor buys nothing and the
+  // redeem path would be slow enough to be a denial-of-service lever.
+  codeHash String
+
+  // email | itIssued. How the code reached the person, recorded because an
+  // investigation later needs to know which path was used, not just that one was.
+  delivery String @default("itIssued")
+
+  createdAt     DateTime  @default(now())
+  usedAt        DateTime?
+  revokedAt     DateTime?
+  // Why it was revoked: signin | newRequest | admin. A code invalidated because
+  // the person simply signed in is a very different event from one an admin
+  // killed, and both are worth telling apart afterwards.
+  revokedReason String    @default("")
+
+  attempts Int @default(0)
+
+  // Who issued it, when IT did. Empty for a self-serve email request — and that
+  // emptiness is itself the record that nobody was involved.
+  issuedByName String @default("")
+  issuedByRole String @default("")
+
+  requestedIp String @default("")
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 // Login throttle state, shared across serverless instances. One row per failed
@@ -198,4 +799,121 @@ model AuditLog {
   @@index([at])
   @@index([caseId])
   @@index([action])
+}
+
+// ─── Workforce management ────────────────────────────────────────────────────
+//
+// Three tables carry the plan: what work is expected (Forecast), what shape a
+// working day takes (ShiftPattern), and who is doing what on a given day
+// (ScheduleEntry). Everything else — required staffing, coverage, shrinkage,
+// adherence — is derived by src/lib/wfm.js from those plus the attendance
+// events that already exist. Nothing here stores a computed number, because a
+// stored requirement is a number that silently stops matching its inputs.
+
+// A demand forecast, one row per interval per queue. Volumes and handling times
+// come from the client's ACD reports; this table is the planning copy of them.
+//
+// The interval is stored as its "HH:MM" start label rather than an index, so a
+// row remains readable — and joinable to a schedule — if the planning interval
+// width is ever changed from 30 minutes.
+model Forecast {
+  id       String @id @default(cuid())
+  account  String
+  lob      String @default("")
+  date     String // YYYY-MM-DD, calendar day (see Case.date)
+  // "HH:MM" start of the interval, in the operating time zone.
+  interval String
+
+  contacts   Int
+  ahtSeconds Int
+
+  // Where the numbers came from: client | historical | manual. A manual
+  // override of a client figure is a decision someone made, and the plan should
+  // be able to say who.
+  source    String @default("manual")
+  actorName String @default("")
+  actorRole String @default("")
+  note      String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One forecast per interval per queue. Re-importing a day updates in place
+  // rather than doubling its volume — the failure mode that makes a planner
+  // stop trusting an import.
+  @@unique([account, lob, date, interval])
+  @@index([account, date])
+}
+
+// A named working pattern — "Early 8-4", "Split 10-7". Patterns exist so a
+// schedule can be built by assigning a shape rather than typing two times four
+// hundred times, and so changing a shift's break structure is one edit.
+model ShiftPattern {
+  id      String @id @default(cuid())
+  name    String @unique
+  // Scope. Empty means it is available to every account.
+  account String @default("")
+  lob     String @default("")
+
+  startTime       String // "HH:MM" local
+  // Minutes, not an end time: a shift crossing midnight has an end time that
+  // sorts before its start, and every comparison against it then needs a
+  // special case. A duration has no such edge.
+  durationMinutes Int
+
+  // Paid break and unpaid meal minutes inside the duration. Both matter and
+  // they are not interchangeable: paid breaks are shrinkage but still cost
+  // wages, unpaid meals are neither.
+  paidBreakMinutes   Int @default(30)
+  unpaidBreakMinutes Int @default(30)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries ScheduleEntry[]
+
+  @@index([account, active])
+}
+
+// One person, one day, one planned activity. A day off is a row rather than an
+// absent row: "nobody scheduled them" and "they are off" are different states,
+// and only one of them is a mistake worth flagging.
+model ScheduleEntry {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  date String // YYYY-MM-DD
+
+  // Shift | Training | Meeting | Leave | Off | Overtime. Validated against
+  // SCHEDULE_ACTIVITIES in the engine rather than as an enum, so operations can
+  // add one without a migration — the same choice AttendanceEvent.aux makes.
+  activity String @default("Shift")
+
+  // Set from the pattern when one is used, and copied rather than referenced so
+  // that editing a pattern next quarter cannot silently rewrite last month's
+  // published schedule. A published roster is a promise about specific hours.
+  startTime       String @default("")
+  durationMinutes Int    @default(0)
+
+  patternId String?
+  pattern   ShiftPattern? @relation(fields: [patternId], references: [id], onDelete: SetNull)
+
+  // Published schedules are visible to the agent; drafts are not. A schedule an
+  // agent can see is a schedule they will plan their life around, so making it
+  // visible has to be a deliberate act.
+  published Boolean @default(false)
+
+  note      String   @default("")
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One planned activity per person per day per start time — a split shift is
+  // two rows, an accidental double-save is one.
+  @@unique([employeeId, date, startTime])
+  @@index([date, published])
+  @@index([employeeId, date])
 }

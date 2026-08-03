@@ -106,14 +106,14 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
     <>
       <GlassCard glow="violet" className="border-violet-400/25">
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-violet-400/30 bg-violet-500/15 text-violet-300">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-violet-400/30 bg-violet-500/15 text-[color:var(--signal)]">
             <Signature size={17} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[13px] font-bold uppercase tracking-wider text-violet-200">
+            <h2 className="text-[13px] font-bold uppercase tracking-wider text-[color:var(--signal)]">
               {t(locale, "portal.pendingAcks")} — {pending.length}
             </h2>
-            <p className="text-[12.5px] text-slate-400">{t(locale, "portal.pendingBlurb")}</p>
+            <p className="text-[12.5px] text-[color:var(--sub)]">{t(locale, "portal.pendingBlurb")}</p>
           </div>
         </div>
 
@@ -122,17 +122,17 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
             <button
               key={c.id}
               onClick={() => open(c)}
-              className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-violet-400/30 hover:bg-white/10"
+              className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-[color:var(--line)] bg-[color:var(--mist)] p-3 text-left transition hover:border-violet-400/30 hover:bg-[color:var(--mist)]"
             >
-              <FileWarning size={14} className="shrink-0 text-violet-300" />
-              <span className="font-mono text-[12px] text-slate-300">{c.date}</span>
-              <span className="text-[13px] font-medium text-slate-100">
+              <FileWarning size={14} className="shrink-0 text-[color:var(--signal)]" />
+              <span className="font-mono text-[12px] text-[color:var(--ink-soft)]">{c.date}</span>
+              <span className="text-[13px] font-medium text-[color:var(--ink)]">
                 {c.violation}
                 {c.occurrence ? ` · ${ordinal(c.occurrence)} occurrence` : ""}
               </span>
               {c.severity && <GlassBadge tone={SEV_TONE[c.severity] || "neutral"}>{c.severity}</GlassBadge>}
               <span className="flex-1" />
-              <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-violet-300">
+              <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-[color:var(--signal)]">
                 {t(locale, "portal.reviewSign")} <ChevronRight size={13} className="rtl:rotate-180" />
               </span>
             </button>
@@ -144,20 +144,20 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
         {active && (
           <form onSubmit={sign} className="grid gap-4">
             {/* What is being acknowledged */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--mist)] p-4">
               <div className="flex flex-wrap items-center gap-2">
                 {active.severity && <GlassBadge tone={SEV_TONE[active.severity] || "neutral"}>{active.severity}</GlassBadge>}
-                <span className="font-mono text-[12px] text-slate-400">{active.date}</span>
+                <span className="font-mono text-[12px] text-[color:var(--sub)]">{active.date}</span>
                 {active.occurrence && <GlassBadge tone="neutral">{ordinal(active.occurrence)} occurrence</GlassBadge>}
               </div>
-              <div className="mt-2 text-[15px] font-semibold text-slate-100">{active.violation}</div>
+              <div className="mt-2 text-[15px] font-semibold text-[color:var(--ink)]">{active.violation}</div>
               <div className="mt-3 rounded-lg border border-violet-400/25 bg-violet-500/10 px-3.5 py-2.5">
-                <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-violet-300">
+                <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-[color:var(--signal)]">
                   Prescribed action
                 </div>
-                <div className="mt-0.5 text-[15px] font-bold text-violet-100">{active.action}</div>
+                <div className="mt-0.5 text-[15px] font-bold text-[color:var(--signal-strong)]">{active.action}</div>
                 {active.deductionApplied > 0 && (
-                  <div className="mt-1 text-[12px] text-slate-300">
+                  <div className="mt-1 text-[12px] text-[color:var(--ink-soft)]">
                     Salary deduction to be executed: <b>{active.deductionApplied} day{active.deductionApplied === 1 ? "" : "s"}</b>{" "}
                     (already capped per Egyptian Labour Law No. 12/2003 — max 5 days per incident and per month).
                   </div>
@@ -180,20 +180,20 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
               href={`/api/cases/${active.id}/letter`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-violet-300 hover:text-violet-200"
+              className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-[color:var(--signal)] hover:text-[color:var(--signal-strong)]"
             >
               <FileText size={14} />
               {t(locale, "portal.downloadLetter")}
             </a>
 
             {/* Right to contest */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+            <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--mist)] p-3.5">
               {appealState === "pending" ? (
                 <p className="inline-flex items-center gap-2 text-[12.5px] text-amber-300">
                   <Gavel size={14} /> {t(locale, "portal.appealPending")}
                 </p>
               ) : appealState ? (
-                <p className="inline-flex items-center gap-2 text-[12.5px] text-slate-300">
+                <p className="inline-flex items-center gap-2 text-[12.5px] text-[color:var(--ink-soft)]">
                   <Gavel size={14} /> Appeal {appealState === "overturned" ? "granted — this case was overturned" : "reviewed — the decision stands"}.
                 </p>
               ) : appealOpen ? (
@@ -204,7 +204,7 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
                     onChange={(e) => setAppealReason(e.target.value)}
                     rows={3}
                     placeholder="Explain what you believe is incorrect (at least 10 characters)…"
-                    className="w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-[13px] text-slate-100 outline-none focus:border-amber-400/40"
+                    className="w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--mist)] p-2.5 text-[13px] text-[color:var(--ink)] outline-none focus:border-amber-400/40"
                   />
                   <div className="flex items-center justify-end gap-2">
                     <GlassButton type="button" variant="ghost" onClick={() => setAppealOpen(false)} disabled={busy}>
@@ -227,7 +227,7 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
             </div>
 
             {/* The statement + signature */}
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3.5">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[color:var(--line)] bg-[color:var(--mist)] p-3.5">
               <input
                 type="checkbox"
                 checked={accepted}
@@ -237,7 +237,7 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
                 }}
                 className="mt-0.5 h-4 w-4 accent-emerald-400"
               />
-              <span className="text-[13px] leading-relaxed text-slate-200">
+              <span className="text-[13px] leading-relaxed text-[color:var(--ink)]">
                 I have read and understood the Disciplinary Matrix, and I acknowledge the violation and the prescribed
                 action recorded above.
               </span>
@@ -253,7 +253,7 @@ export default function AckCenter({ pending, locale = "en" }: { pending: Pending
                   setError("");
                 }}
               />
-              <p className="mt-1.5 text-[11.5px] text-slate-500">
+              <p className="mt-1.5 text-[11.5px] text-[color:var(--sub)]">
                 Your signature and timestamp are recorded permanently in the audit log.
               </p>
             </div>

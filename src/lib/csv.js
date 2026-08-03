@@ -1,6 +1,7 @@
 /* Weekly PMO export — the full transactional ledger, one row per case. */
 
 import { csvCell } from "./format.js";
+import { BRAND } from "./brand";
 import { todayStr } from "./dates.js";
 import { statusOf } from "./engine.js";
 
@@ -94,7 +95,7 @@ export function downloadCsv(entries) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `quorum-case-log-${todayStr()}.csv`;
+  a.download = `${BRAND.slug}-case-log-${todayStr()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -55,3 +55,40 @@ export function t(locale, key) {
   const l = LOCALES.includes(locale) ? locale : DEFAULT_LOCALE;
   return (DICT[l] && DICT[l][key]) || DICT.en[key] || key;
 }
+
+/**
+ * The display label of a taxonomy entry, in the reader's language.
+ *
+ * This exists because of a gap worth naming: the taxonomies carry 139 Arabic
+ * labels — every leave type, exit reason, AUX state, schedule activity and
+ * journey phase — written carefully, and not one of them was ever rendered.
+ * Every component reached for `.label` and got English regardless of locale.
+ *
+ * So the translation work was already done and simply not connected, and one
+ * function connects all of it. Anything without an Arabic label falls back to
+ * the English one rather than showing a key or a blank, because a screen with
+ * holes in it is worse than a screen with two languages on it.
+ *
+ * @param {{label?: string, labelAr?: string}|null|undefined} item
+ * @param {string} locale
+ * @param {string} [fallback] shown when the entry is unknown entirely
+ */
+export function labelOf(item, locale, fallback = "") {
+  if (!item) return fallback;
+  if (locale === "ar" && item.labelAr) return item.labelAr;
+  return item.label || fallback;
+}
+
+/**
+ * Label a code against a map, which is what nearly every call site actually
+ * has: a stored string like "Casual" and the taxonomy it belongs to.
+ *
+ * An unknown code returns itself. That is deliberate — a code the taxonomy has
+ * dropped is data that still exists in rows, and showing "Casual" is honest
+ * where showing "" or "unknown" hides that a record refers to something the
+ * system no longer defines.
+ */
+export function labelFor(map, code, locale) {
+  const key = String(code ?? "");
+  return labelOf(map?.[key], locale, key);
+}

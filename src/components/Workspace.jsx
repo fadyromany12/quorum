@@ -8,7 +8,7 @@
    The glass restyle of these inner views rides on the shared kit later; the
    workspace keeps its proven light look for now, painted over the dark shell. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { signOut } from "next-auth/react";
 import {
@@ -18,6 +18,8 @@ import {
   Inbox,
   CheckCheck,
   Users,
+  IdCard,
+  MonitorPlay,
   Table2,
   UserCog,
   Settings2,
@@ -31,6 +33,11 @@ import {
   CircleAlert,
   LogOut,
   X,
+  UserPlus,
+  UserMinus,
+  Gauge,
+  TrendingUp,
+  KeyRound,
 } from "lucide-react";
 
 import { useServerData } from "../hooks/useServerData.js";
@@ -39,6 +46,8 @@ import { P, accColor, alpha } from "../lib/tokens.js";
 import { BRAND } from "../lib/brand";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
+import DensityToggle from "./DensityToggle";
+import InboxBell from "./InboxBell";
 import { todayStr, daysAgo, monthOf } from "../lib/dates.js";
 import { fmtMin } from "../lib/format.js";
 import { statusOf, computeEscalations, countsForDiscipline } from "../lib/engine.js";
@@ -46,6 +55,8 @@ import { downloadCsv } from "../lib/csv.js";
 import { TABS_FOR, ROLE_LABEL, can } from "../lib/auth.js";
 
 import { TInput, BtnPrimary, BtnGhost, SectionTitle, Muted } from "./ui/index.jsx";
+import Tip from "./ui/Tip.jsx";
+import GuideButton from "./GuideButton.jsx";
 import LogForm from "./LogForm.jsx";
 import EntryCard from "./EntryCard.jsx";
 import Dashboard from "./Dashboard.jsx";
@@ -56,21 +67,52 @@ import DcmEditor from "./DcmEditor.jsx";
 import UserManagement from "./UserManagement.jsx";
 import SettingsView from "./SettingsView.jsx";
 import AuditTrail from "./AuditTrail.jsx";
+import People from "./People.jsx";
+import FloorView from "./FloorView.jsx";
+import RequestInbox from "./RequestInbox.jsx";
+import WfmPlanner from "./WfmPlanner.jsx";
+import Insights from "./Insights.jsx";
+import HelpDesk from "./HelpDesk.jsx";
+import Exceptions from "./Exceptions.jsx";
+import { navFor, sectionOfTab, stagesOf } from "../lib/journey.js";
+import { labelOf, dirFor } from "../lib/i18n.js";
+import { LocaleProvider } from "../hooks/useLocale.jsx";
 
-const NAV = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "log", label: "Daily log", icon: ClipboardPlus },
-  { id: "rta", label: "RTA upload", icon: UploadCloud },
-  { id: "triage", label: "Triage gate", icon: Inbox, badge: "review" },
-  { id: "approvals", label: "Approvals", icon: CheckCheck, badge: "approvals" },
-  { id: "agents", label: "Agents", icon: Users },
-  { id: "audit", label: "Audit trail", icon: ScrollText },
-  { id: "dcm", label: "DCM matrix", icon: Table2 },
-  { id: "users", label: "Users", icon: UserCog },
-  { id: "settings", label: "Settings", icon: Settings2 },
-];
+/* What each screen is called and what it looks like. Where it sits is decided
+   by journey.js — this map is only the label and the icon, so renaming a screen
+   is one edit and moving it is another, independently. */
+const TAB_META = {
+  dashboard: { label: "Overview", labelAr: "نظرة عامة", icon: LayoutDashboard },
+  joining: { label: "New joiners", labelAr: "الملتحقون الجدد", icon: UserPlus },
+  floor: { label: "Live floor", labelAr: "الأرضية المباشرة", icon: MonitorPlay },
+  exceptions: { label: "Exceptions", labelAr: "المخالفات الحضورية", icon: TriangleAlert },
+  requests: { label: "Requests", labelAr: "الطلبات", icon: Scale },
+  approvals: { label: "My approvals", labelAr: "موافقاتي", icon: CheckCheck, badge: "approvals" },
+  log: { label: "Log an event", labelAr: "تسجيل واقعة", icon: ClipboardPlus },
+  rta: { label: "Import adherence", labelAr: "استيراد الالتزام", icon: UploadCloud },
+  wfm: { label: "Planning", labelAr: "التخطيط", icon: Gauge },
+  triage: { label: "Case review", labelAr: "مراجعة الحالات", icon: Inbox, badge: "review" },
+  agents: { label: "Scorecards", labelAr: "بطاقات الأداء", icon: Users },
+  leaving: { label: "Leavers", labelAr: "المغادرون", icon: UserMinus },
+  people: { label: "Directory", labelAr: "الدليل", icon: IdCard },
+  roster: { label: "All employees", labelAr: "كل الموظفين", icon: Table2 },
+  insights: { label: "Insights", labelAr: "التحليلات", icon: TrendingUp },
+  audit: { label: "Audit trail", labelAr: "سجل التدقيق", icon: ScrollText },
+  helpdesk: { label: "Help desk", labelAr: "الدعم الفني", icon: KeyRound },
+  matrix: { label: "Discipline matrix", labelAr: "مصفوفة الجزاءات", icon: Table2 },
+  users: { label: "Accounts", labelAr: "الحسابات", icon: UserCog },
+  settings: { label: "Settings", labelAr: "الإعدادات", icon: Settings2 },
+};
 
-export default function Workspace({ initial, me, themeIntent }) {
+/* Where the sidebar starts, measured from the top of the window: the glass
+   header's height plus a little air. It is both the sticky offset and the
+   amount subtracted from the viewport to bound the sidebar's own height, and
+   those two must be the same number — if the offset were larger the list would
+   overflow past the bottom of the window, and the entries hidden down there
+   would be unreachable again by a different route. */
+const NAV_TOP = 118;
+
+export default function Workspace({ initial, me, themeIntent, density, locale = "en" }) {
   const {
     data,
     error,
@@ -112,6 +154,10 @@ export default function Workspace({ initial, me, themeIntent }) {
   const [acc, setAcc] = useState("All");
   const [range, setRange] = useState("all"); // all | 30 | month
   const [showForm, setShowForm] = useState(false);
+  /* An exception the lead chose to log, carried across the tab change. Cleared
+     as soon as the form takes it, so re-opening the form later does not
+     resurrect a case someone decided not to raise. */
+  const [logSeed, setLogSeed] = useState(null);
   const [logFilter, setLogFilter] = useState("all"); // all | review | open
   const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [query, setQuery] = useState("");
@@ -217,11 +263,40 @@ export default function Workspace({ initial, me, themeIntent }) {
   });
 
   const badges = { review: pendingReview.length, approvals: pendingOps.length + pendingHr.length };
-  const nav = NAV.filter((n) => allowedTabs.includes(n.id));
-  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "dcm", "rta", "users"].includes(tab);
+  /* Grouped by journey phase rather than listed flat. A flat list of fifteen
+     screens with the discipline matrix in the middle teaches a new user that
+     the product is about violations. */
+  /* Headcount comes from the server already scoped to what this actor may see,
+     so a lead's tiles and the screens they link to cannot disagree. */
+  const headcount = data.headcount ?? {};
+  const inPhase = (id) => stagesOf(id).reduce((n, st) => n + (headcount[st] ?? 0), 0);
+
+  const nav = navFor(allowedTabs, TAB_META);
+  const section = sectionOfTab(tab);
+
+  /* Keep the current screen visible inside its own scroller. Without this the
+     sidebar gains independent scrolling and immediately loses the one thing
+     the page scroll used to guarantee: that wherever you were, the highlighted
+     entry was somewhere you could see. Landing on a tab near the bottom — a
+     bookmark, a reload, a jump from a badge — would otherwise show a list
+     scrolled to the top with the selection off-screen below.
+
+     "nearest" rather than "center" so an entry already in view does not move. */
+  const navRef = useRef(null);
+  useEffect(() => {
+    navRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [tab]);
+  // "people" is in this list for a different reason than the rest: the others
+  // are admin screens, but the directory genuinely has its own data source and
+  // is meaningful with an empty case ledger.
+  const showEmpty = empty && !(tab === "log" && showForm) && !["settings", "matrix", "rta", "users", "people", "roster", "joining", "leaving", "floor", "requests", "wfm", "insights", "helpdesk"].includes(tab);
 
   return (
-    <div className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
+    <LocaleProvider locale={locale}>
+    {/* dir on the shell rather than on <html>: the workspace is one client
+        subtree and the login and portal set their own, so scoping it here keeps
+        each surface honest about its own direction. */}
+    <div dir={dirFor(locale)} className="ao-body" style={{ minHeight: "100vh", background: P.paper, color: P.ink }}>
       {/* ── Header band — sticky glass over the aurora ── */}
       <header
         className="ao-glass"
@@ -229,9 +304,22 @@ export default function Workspace({ initial, me, themeIntent }) {
       >
         <div className="mx-auto px-4 py-4" style={{ maxWidth: 1320 }}>
           <div className="flex items-center gap-3 flex-wrap">
-            <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org} · DCM v1.0`} />
+            <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org}`} />
             <span className="flex-1" />
-            <ThemeToggle initial={themeIntent} />
+            <GuideButton role={me.role} />
+            <Tip label="Switch between dark, light and following your system" side="bottom">
+              {/* The queue, visible from wherever you are. Clicking an entry
+                  goes to the screen that owns it rather than rendering the list
+                  twice. */}
+              <InboxBell onGo={(t) => allowedTabs.includes(t) && goTab(t)} />
+
+              {/* Next to the theme because it is the same kind of thing: a
+                  preference about how the app looks to this person, stored the
+                  same way, and belonging wherever they already go to change
+                  one. */}
+              <DensityToggle initial={density} />
+              <ThemeToggle initial={themeIntent} />
+            </Tip>
             <UserChip me={me} onLogout={() => signOut({ callbackUrl: "/login" })} />
           </div>
 
@@ -294,11 +382,43 @@ export default function Workspace({ initial, me, themeIntent }) {
       )}
 
       <div className="mx-auto px-4 pb-16 flex gap-5 items-start" style={{ maxWidth: 1320 }}>
-        {/* ── Sidebar (sticks below the glass header) ── */}
-        <nav className="hidden md:block py-4" style={{ width: 190, flexShrink: 0, position: "sticky", top: 118 }}>
-          <div className="grid gap-1">
-            {nav.map((n) => (
-              <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
+        {/* ── Sidebar ──
+            Sticky pins the top of an element; it does nothing about its height.
+            A Super Admin's list is nineteen screens plus seven headings and a
+            button, which is taller than most viewports, so the last entries sat
+            below the fold and the only way to reach them was to scroll the
+            whole page — dragging the content you were reading out of view to
+            get at a menu. Two columns of different lengths need two scrollers.
+
+            So: bounded to the space between the header and the bottom of the
+            window, with its own overflow. overscroll-behavior keeps a flick at
+            the end of the list from carrying on into the page behind it. */}
+        <nav
+          ref={navRef}
+          className="hidden md:block py-4"
+          style={{
+            width: 190,
+            flexShrink: 0,
+            position: "sticky",
+            top: NAV_TOP,
+            maxHeight: `calc(100vh - ${NAV_TOP}px)`,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+          }}
+        >
+          <div className="grid gap-3">
+            {nav.map((s) => (
+              <div key={s.id} className="grid gap-1">
+                <div
+                  className="ao-disp uppercase tracking-wide"
+                  style={{ fontSize: 9.5, color: P.sub, letterSpacing: 0.9, padding: "0 12px 2px", opacity: 0.75 }}
+                >
+                  {labelOf(s, locale)}
+                </div>
+                {s.items.map((n) => (
+                  <NavItem key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} locale={locale} />
+                ))}
+              </div>
             ))}
           </div>
           {can(me, "log") && (
@@ -320,31 +440,63 @@ export default function Workspace({ initial, me, themeIntent }) {
         <main className="flex-1 min-w-0 pb-4">
           {/* Mobile nav */}
           <div className="md:hidden flex gap-2 overflow-x-auto mt-4 pb-1">
-            {nav.map((n) => (
-              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} />
+            {nav.flatMap((s) => s.items).map((n) => (
+              <NavChip key={n.id} item={n} active={tab === n.id} badge={badges[n.badge] || 0} onClick={() => goTab(n.id)} locale={locale} />
             ))}
           </div>
 
-          {/* KPI scorecard — noise for WFM, whose whole job here is the upload */}
-          {me.role !== "WFM" && (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
-              <KPI label="Disciplinary cases" value={disciplinaryCount} icon={ShieldAlert} tone={disciplinaryCount ? P.brick : P.green} />
-              <KPI label="Total hours lost" value={hoursLost} format={(n) => fmtMin(Math.round(n))} icon={Clock3} tone={hoursLost ? P.brick : P.green} />
+          {/* The journey strip belongs to whoever works the journey. Gated on
+              holding the overview screen rather than on naming roles: the old
+              `role !== "WFM"` check meant every role added later inherited a
+              headcount and open-case count by default, and IT — an
+              account-recovery desk — was shown both. */}
+          {allowedTabs.includes("dashboard") && (
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mt-4">
+              {/* Where people are in the journey, first — the strip sits above
+                  every screen, so it sets what the product appears to be about.
+                  Conduct keeps a tile because it is real work; it is no longer
+                  the first four. */}
+              <KPI label="Headcount" value={inPhase("work")} icon={Users} tone={P.petrol} hint="Everyone active on the floor right now — not counting joiners or leavers" />
               <KPI
-                label="Pending triage review"
-                value={pendingReview.length}
-                icon={Inbox}
-                tone={pendingReview.length ? P.petrol : P.green}
+                label="Joining"
+                hint="Accepted offers, onboarding and anyone still inside probation"
+                value={inPhase("join")}
+                icon={UserPlus}
+                tone={inPhase("join") ? P.petrol : P.sub}
+                onClick={allowedTabs.includes("joining") ? () => goTab("joining") : undefined}
+              />
+              <KPI
+                label="On a plan"
+                hint="People on a performance plan or suspended — the ones needing attention"
+                value={inPhase("grow")}
+                icon={TriangleAlert}
+                tone={inPhase("grow") ? P.amber : P.green}
                 onClick={allowedTabs.includes("triage") ? () => goTab("triage") : undefined}
               />
               <KPI
-                label="Active escalations"
+                label="Leaving"
+                hint="Serving notice — clearance is not finished until their last day"
+                value={headcount.Notice ?? 0}
+                icon={UserMinus}
+                tone={(headcount.Notice ?? 0) ? P.amber : P.green}
+                onClick={allowedTabs.includes("leaving") ? () => goTab("leaving") : undefined}
+              />
+              <KPI
+                label="Open cases"
+                hint="Logged conduct or attendance cases nobody has reviewed yet"
+                value={pendingReview.length}
+                icon={Inbox}
+                tone={pendingReview.length ? P.brick : P.green}
+                onClick={allowedTabs.includes("triage") ? () => goTab("triage") : undefined}
+              />
+              <KPI
+                label="Awaiting you"
+                hint="Decisions blocked on your sign-off — nothing moves until you act"
                 value={activeEscalations}
-                icon={TriangleAlert}
+                icon={CheckCheck}
                 tone={activeEscalations ? P.amber : P.green}
                 onClick={allowedTabs.includes("approvals") ? () => goTab("approvals") : undefined}
               />
-              <KPI label="Deduction pool" value={deductionPool} format={(n) => `${Math.round(n)}d`} icon={Scale} tone={deductionPool ? P.ink : P.green} />
             </div>
           )}
 
@@ -369,7 +521,7 @@ export default function Workspace({ initial, me, themeIntent }) {
             {tab === "log" && (
               <div className="grid gap-4">
                 {showForm && can(me, "log") ? (
-                  <LogForm data={data} defaultAccount={acc} onAdd={addEntry} onCancel={() => setShowForm(false)} />
+                  <LogForm data={data} defaultAccount={acc} seed={logSeed} onAdd={addEntry} onCancel={() => { setShowForm(false); setLogSeed(null); }} />
                 ) : (
                   !empty &&
                   can(me, "log") && (
@@ -452,6 +604,19 @@ export default function Workspace({ initial, me, themeIntent }) {
 
             {tab === "rta" && can(me, "upload") && <RtaUploader data={data} me={me} onCommit={commitRta} />}
 
+            {tab === "insights" && <Insights accounts={data.accounts} />}
+
+            {tab === "helpdesk" && can(me, "issueReset") && <HelpDesk canRevoke={can(me, "revokeReset")} />}
+
+            {tab === "wfm" && (
+              <WfmPlanner
+                me={me}
+                accounts={data.accounts}
+                canWrite={can(me, "wfmWrite")}
+                canRoster={can(me, "scheduleWrite")}
+              />
+            )}
+
             {tab === "triage" && !empty && (
               <TriageGate
                 rows={pendingReview}
@@ -501,11 +666,68 @@ export default function Workspace({ initial, me, themeIntent }) {
               </div>
             )}
 
+            {/* The directory is independent of the case ledger — an org with no
+                violations logged still has people in it. */}
+            {tab === "people" && <People accounts={data.accounts} me={me} />}
+
+            {/* The whole population as a table. Cards are right for browsing
+                twenty people and useless for scanning two hundred. */}
+            {tab === "roster" && (
+              <People
+                accounts={data.accounts}
+                me={me}
+                view="table"
+                everyone
+                heading="All employees"
+                blurb="Everyone on record, including applicants and leavers. Sort any column; click a row to open the record."
+              />
+            )}
+
+            {/* The two ends of the journey. Same directory, filtered to the
+                stages that phase covers — a separate component would be a
+                second implementation of search, paging and the profile view. */}
+            {tab === "joining" && (
+              <People
+                accounts={data.accounts}
+                me={me}
+                stages={stagesOf("join")}
+                heading="New joiners"
+                blurb="Everyone between an accepted offer and a confirmed probation."
+              />
+            )}
+            {tab === "leaving" && (
+              <People
+                accounts={data.accounts}
+                me={me}
+                stages={stagesOf("leave")}
+                heading="Leavers"
+                blurb="Serving notice or already gone. Clearance lives on each record."
+              />
+            )}
+
+            {/* Live attendance, independent of the case ledger like the directory. */}
+            {tab === "floor" && can(me, "floorView") && <FloorView accounts={data.accounts} />}
+
+            {/* Where the roster and the clock disagreed. "Log this" carries the
+                agent, the day and the matrix rule into the case form rather
+                than leaving the lead to retype all three — that retyping is
+                where the accuracy went. */}
+            {tab === "exceptions" && can(me, "floorView") && (
+              <Exceptions
+                accounts={data.accounts}
+                onLogCase={can(me, "log") ? (seed) => { setLogSeed(seed); goTab("log"); setShowForm(true); } : undefined}
+              />
+            )}
+
+            {/* Approvals for every request type. Independent of the case ledger —
+                an org with no violations still has leave to approve. */}
+            {tab === "requests" && <RequestInbox people={data.people || []} />}
+
             {tab === "agents" && !empty && <AgentProfiles entries={data.entries} accounts={data.accounts} />}
 
             {tab === "audit" && can(me, "audit") && <AuditTrail />}
 
-            {tab === "dcm" && can(me, "admin") && <DcmEditor dcm={data.dcm} onChange={setDcm} />}
+            {tab === "matrix" && can(me, "admin") && <DcmEditor dcm={data.dcm} onChange={setDcm} />}
 
             {tab === "users" && can(me, "admin") && (
               <UserManagement
@@ -557,7 +779,9 @@ export default function Workspace({ initial, me, themeIntent }) {
           </button>
         </div>
       )}
+
     </div>
+    </LocaleProvider>
   );
 }
 
@@ -574,19 +798,20 @@ function UserChip({ me, onLogout }) {
           {ROLE_LABEL[me.role]}
         </div>
       </div>
-      <button
-        onClick={onLogout}
-        title="Sign out"
-        aria-label="Sign out"
-        style={{ border: "1px solid var(--hdr-line)", background: "transparent", color: "var(--hdr-text)", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
-      >
-        <LogOut size={13} />
-      </button>
+      <Tip label="Sign out" side="bottom">
+        <button
+          onClick={onLogout}
+          aria-label="Sign out"
+          style={{ border: "1px solid var(--hdr-line)", background: "transparent", color: "var(--hdr-text)", borderRadius: 6, padding: 6, cursor: "pointer", display: "flex" }}
+        >
+          <LogOut size={13} />
+        </button>
+      </Tip>
     </div>
   );
 }
 
-function NavItem({ item, active, badge, onClick }) {
+function NavItem({ item, active, badge, onClick, locale = "en" }) {
   const Icon = item.icon;
   return (
     <button
@@ -594,24 +819,48 @@ function NavItem({ item, active, badge, onClick }) {
       data-active={active ? "true" : "false"}
       className="ao-disp ao-nav uppercase tracking-wide font-semibold flex items-center gap-2 transition group"
       style={{
+        position: "relative",
         fontSize: 12.5,
         padding: "9px 12px",
         borderRadius: 8,
         cursor: "pointer",
-        textAlign: "left",
+        textAlign: "start",
         width: "100%",
-        border: `1px solid ${active ? P.line : "transparent"}`,
-        background: active ? P.card : "transparent",
+        border: "1px solid transparent",
+        background: "transparent",
         color: active ? P.ink : P.sub,
       }}
     >
+      {/* The selection is its own element rather than a background on the
+          button, so exactly one of them exists at a time and the browser can
+          interpolate it from the old position to the new one. Painted behind
+          the label, and hidden from the accessibility tree — the button's own
+          state already says which is current. */}
+      {active && (
+        <span
+          aria-hidden="true"
+          className="ao-nav-marker"
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 8,
+            border: `1px solid ${P.line}`,
+            background: P.card,
+            zIndex: 0,
+          }}
+        />
+      )}
       <Icon
         size={15}
         color={active ? P.petrol : P.sub}
         className="transition-transform duration-200 group-hover:scale-110"
+        style={{ position: "relative", zIndex: 1, flexShrink: 0 }}
       />
-      <span className="flex-1 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">
-        {item.label}
+      <span
+        className="flex-1 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+        style={{ position: "relative", zIndex: 1 }}
+      >
+        {labelOf(item, locale)}
       </span>
       {badge > 0 && (
         <span
@@ -625,7 +874,7 @@ function NavItem({ item, active, badge, onClick }) {
   );
 }
 
-function NavChip({ item, active, badge, onClick }) {
+function NavChip({ item, active, badge, onClick, locale = "en" }) {
   const Icon = item.icon;
   return (
     <button
@@ -643,7 +892,7 @@ function NavChip({ item, active, badge, onClick }) {
       }}
     >
       <Icon size={12} />
-      {item.label}
+      {labelOf(item, locale)}
       {badge > 0 && (
         <span className="ao-mono" style={{ fontSize: 10, background: active ? "#fff" : P.brick, color: active ? P.petrol : "#fff", borderRadius: 999, padding: "0 5px" }}>
           {badge}
@@ -656,10 +905,11 @@ function NavChip({ item, active, badge, onClick }) {
 /* A scorecard figure. `value` is the raw number so it can count up; `format`
    renders it (hours, days…). Clickable cards lift, glow and nudge their icon —
    the whole tile reads as a control, not a label. */
-function KPI({ label, value, format, icon: Icon, tone, onClick }) {
+function KPI({ label, value, format, icon: Icon, tone, onClick, hint }) {
   const n = useCountUp(value);
   const shown = format ? format(n) : Math.round(n).toLocaleString();
   return (
+    <Tip label={hint} side="bottom" fill>
     <div
       onClick={onClick}
       role={onClick ? "button" : undefined}
@@ -686,8 +936,10 @@ function KPI({ label, value, format, icon: Icon, tone, onClick }) {
       </div>
       <div className="ao-disp uppercase tracking-wider font-semibold mt-1" style={{ fontSize: 10.5, color: P.sub }}>
         {label}
+        {hint ? <span className="sr-only"> — {hint}</span> : null}
       </div>
     </div>
+    </Tip>
   );
 }
 

@@ -10,8 +10,15 @@ import { toEntry } from "@/lib/db";
 import { getLocale } from "@/lib/locale";
 import { GlassCard, GlassBadge, GlassStat, GlassProgress } from "@/components/glass";
 import AckCenter from "@/components/portal/AckCenter";
+import AgentClock from "@/components/portal/AgentClock";
+import MyRequests from "@/components/portal/MyRequests";
+import MyPayslips from "@/components/portal/MyPayslips";
+import MyProfile from "@/components/portal/MyProfile";
+import SwapShift from "@/components/portal/SwapShift";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
+import { annualEntitlement } from "@/lib/employee.js";
+import { todayStr } from "@/lib/dates.js";
 import { statusOf } from "@/lib/engine.js";
 import { fmtMin, fmtDate, fmtDateLong, days } from "@/lib/format.js";
 import { addDays } from "@/lib/dates.js";
@@ -40,6 +47,15 @@ export default async function AgentPortalPage() {
     },
   });
 
+  /* The employment record behind this login, for the leave panel. Entitlement is
+     computed server-side because Art. 47's age-50 route needs the birth date,
+     which has no business in the client payload. */
+  const employment = await prisma.employee.findUnique({
+    where: { userId: me.id },
+    select: { hireDate: true, birthDate: true },
+  });
+  const entitlementDays = employment ? annualEntitlement(employment, todayStr()) : 0;
+
   const entries = rows.map(toEntry);
   const ref = { email: me.email, empId: me.empId || "" };
   const summary = agentSummary(entries, ref);
@@ -59,6 +75,23 @@ export default async function AgentPortalPage() {
 
   return (
     <main className="grid gap-4">
+      {/* The clock first: it is the thing an agent opens this page to use, and
+          every other panel here is a read-only standing report. */}
+      <AgentClock />
+
+      {/* Leave: balance, request form, history — the approval engine's agent side. */}
+      <MyRequests entitlementDays={entitlementDays} />
+
+      {/* Swaps sit with leave because they are the same kind of act — asking
+          for a change to the days you work — and an agent who cannot get leave
+          approved will often try a swap next. */}
+      <SwapShift />
+
+      {/* Pay. Below the clock and leave because those are what an agent opens
+          this page to *use*; a payslip is something they come looking for once
+          a month and know exactly where to find. */}
+      <MyPayslips />
+
       {/* Pending acknowledgements — the alert + signature flow */}
       <AckCenter
         locale={locale}
@@ -74,6 +107,13 @@ export default async function AgentPortalPage() {
           appealState: (e.appealState as string) || "",
         }))}
       />
+
+      {/* My record. Below the action queues because it is a reference screen
+          rather than something with a daily rhythm — but above the standing
+          reports, because it is the only panel here the employee can change,
+          and the completeness warning on it can be the reason payroll has not
+          been able to pay them. */}
+      <MyProfile />
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

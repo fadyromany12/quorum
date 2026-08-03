@@ -1,15 +1,21 @@
-/* PUT /api/config — the accounts and team-lead lists. SuperAdmin only. */
+/* PUT /api/config — the org structure and team-lead list. SuperAdmin only.
+
+   Accounts now carry their own lines of business. The column is Json and was
+   holding a flat array of names, so both shapes are accepted on the way in and
+   the current one is always written out — no migration, nothing to backfill. */
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, guarded, GuardError } from "@/lib/api-guard";
+import { checkAccounts } from "@/lib/org.js";
 
 export const PUT = guarded(async (req: Request) => {
   const actor = await requireRole("admin");
   const body = await req.json().catch(() => ({}));
-  const accounts: string[] = Array.isArray(body.accounts) ? body.accounts.map(String) : [];
+  const check = checkAccounts(body.accounts);
+  if (!check.ok) throw new GuardError(400, check.reason);
+  const accounts = check.accounts;
   const tls: string[] = Array.isArray(body.tls) ? body.tls.map(String) : [];
-  if (!accounts.length) throw new GuardError(400, "At least one account is required.");
 
   await prisma.appConfig.upsert({
     where: { id: 1 },
@@ -23,7 +29,7 @@ export const PUT = guarded(async (req: Request) => {
       actorName: actor.name,
       actorRole: actor.role,
       action: "CONFIG_UPDATED",
-      summary: `Config updated — ${accounts.length} accounts, ${tls.length} TLs.`,
+      summary: `Config updated — ${accounts.length} accounts, ${accounts.reduce((n, a) => n + a.lobs.length, 0)} lines of business, ${tls.length} TLs.`,
     },
   });
 

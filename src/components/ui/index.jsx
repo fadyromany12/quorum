@@ -4,6 +4,7 @@
 
 import { Check } from "lucide-react";
 import { P } from "../../lib/tokens.js";
+import Tip from "./Tip.jsx";
 
 export const Label = ({ children }) => (
   <div className="ao-disp uppercase tracking-wider font-semibold" style={{ fontSize: 11, color: P.sub }}>
@@ -34,22 +35,28 @@ export const TArea = ({ style, ...props }) => (
   <textarea {...props} style={{ ...inputStyle, minHeight: 64, resize: "vertical", ...style }} />
 );
 
+/* A status badge. `title` is what the badge *means* — a pill reading "M2" tells
+   nobody anything on its own — and it becomes a hover explanation rather than
+   the browser's native tooltip, which waits too long for anyone to find it.
+   The same text is repeated for screen readers, which never see the bubble. */
 export const Pill = ({ color, children, filled, title }) => (
-  <span
-    className="ao-disp uppercase tracking-wide font-semibold inline-flex items-center"
-    title={title}
-    style={{
-      fontSize: 11,
-      padding: "2px 8px",
-      borderRadius: 999,
-      color: filled ? "#fff" : color,
-      background: filled ? color : "transparent",
-      border: `1px solid ${color}`,
-      whiteSpace: "nowrap",
-    }}
-  >
-    {children}
-  </span>
+  <Tip label={title}>
+    <span
+      className="ao-disp uppercase tracking-wide font-semibold inline-flex items-center"
+      style={{
+        fontSize: 11,
+        padding: "2px 8px",
+        borderRadius: 999,
+        color: filled ? "#fff" : color,
+        background: filled ? color : "transparent",
+        border: `1px solid ${color}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+      {title ? <span className="sr-only"> — {title}</span> : null}
+    </span>
+  </Tip>
 );
 
 /* Pipeline steps: ticking one pops the check in, so completing a stage feels
