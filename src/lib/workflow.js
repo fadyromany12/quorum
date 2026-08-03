@@ -136,6 +136,22 @@ export const REQUEST_TYPES = {
     withdrawableWhilePending: true,
     consequence: "Applies only after HR verifies it against your documents.",
   },
+  /* Two agents trade shifts. The lead approves, because coverage is theirs to
+     answer for — the swap may be fine for the two people and leave 14:00 three
+     short, and the coverage check runs before the request is even offered.
+
+     Deliberately not co-approval between the two agents. The colleague's
+     agreement is a precondition captured when the swap is raised, not a second
+     approval step: modelling it as one would leave a request sitting on an
+     agent who has no queue, no SLA and no reason to look. */
+  shiftSwap: {
+    label: "Shift swap",
+    chain: "directOnly",
+    slaDays: 2,
+    subjectIsRequester: true,
+    withdrawableWhilePending: true,
+    consequence: "Swaps the two shifts on the roster once your lead approves.",
+  },
 };
 
 export const isRequestType = (t) => Object.hasOwn(REQUEST_TYPES, t);

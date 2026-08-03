@@ -251,5 +251,36 @@ console.log("\n── Bulk application ──");
   ok("and the rows are still returned so the preview can show the size", big.rows.length === 40 * 31);
 }
 
+
+console.log("\n── Shift swaps ──");
+{
+  const a = { id: "1", employeeId: "e1", date: "2026-03-02", activity: "Shift", startTime: "09:00", durationMinutes: 480 };
+  const b = { id: "2", employeeId: "e2", date: "2026-03-03", activity: "Shift", startTime: "14:00", durationMinutes: 480 };
+
+  const p = S.swapPlan(a, b);
+  ok("two shifts on different days can be traded", p.ok);
+  /* The shape travels with the shift, not with the person. Exchanging the
+     dates instead would leave each agent on their own shift on a different
+     day — a different request that nobody made. */
+  eq("each agent ends up on the other's shift, at that shift's time",
+    p.rows.map((r) => `${r.employeeId}@${r.date} ${r.startTime}`),
+    ["e2@2026-03-02 09:00", "e1@2026-03-03 14:00"]);
+
+  ok("a missing row is refused rather than swapping with undefined", !S.swapPlan(a, null).ok);
+  ok("swapping with yourself is refused", !S.swapPlan(a, { ...b, employeeId: "e1" }).ok);
+  ok("a day off is not a shift that can be traded", !S.swapPlan(a, { ...b, activity: "Off" }).ok);
+  ok("nor is training", !S.swapPlan(a, { ...b, activity: "Training" }).ok);
+  ok("two identical shifts are refused — the swap would change nothing",
+    !S.swapPlan(a, { ...b, date: a.date, startTime: a.startTime, employeeId: "e2" }).ok);
+
+  eq("a clean swap has nothing wrong with it", S.checkSwap(a, b, { roster: [a, b] }).problems, []);
+
+  /* Double-booking is a refusal rather than a warning: an agent cannot be on
+     two shifts at once, and a roster that says otherwise cannot be worked. */
+  const clash = { id: "3", employeeId: "e1", date: "2026-03-03", activity: "Shift", startTime: "14:00", durationMinutes: 480 };
+  ok("a swap that would double-book someone is refused",
+    S.checkSwap(a, b, { roster: [a, b, clash] }).problems.length > 0);
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

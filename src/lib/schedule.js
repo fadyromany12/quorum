@@ -450,3 +450,77 @@ export function bulkRows({ employeeIds = [], from, to, weekdays = [], pattern = 
 
   return { rows, problems, days };
 }
+
+/* ── Shift swaps ────────────────────────────────────────────────────────────
+
+   Two agents trade days. Today this happens over WhatsApp and reaches the
+   roster, if at all, as a favour someone remembers to type in — which means the
+   coverage model, the exceptions screen and payroll are all working from a
+   roster that is quietly wrong. */
+
+/**
+ * Whether two roster rows can be exchanged, and what the result would be.
+ *
+ * Returns the plan rather than performing it, so the same function answers
+ * "may I offer this?" on the agent's screen and "is this still true?" at
+ * approval — a swap that was fine when proposed may not be by the time a lead
+ * looks, because either roster row can have moved in between.
+ *
+ * @returns {{ok: true, rows: object[]} | {ok: false, reason: string}}
+ */
+export function swapPlan(a, b) {
+  if (!a || !b) return { ok: false, reason: "Both shifts must still be on the roster." };
+  if (a.employeeId === b.employeeId) return { ok: false, reason: "That is the same person's shift." };
+  if (a.date === b.date && a.startTime === b.startTime) {
+    return { ok: false, reason: "Those two shifts are identical — swapping them changes nothing." };
+  }
+  for (const [row, who] of [[a, "Your"], [b, "Their"]]) {
+    if (!SCHEDULE_ACTIVITIES[row.activity]?.covers) {
+      return { ok: false, reason: `${who} ${String(row.activity ?? "entry").toLowerCase()} is not a shift that can be swapped.` };
+    }
+  }
+
+  /* The shape moves with the shift, not with the person: a swap means each
+     agent works the other's day, so the start time, duration and pattern travel
+     across and the dates stay put. Exchanging the dates instead would leave
+     each agent on their own shift on a different day, which is a different
+     request nobody made. */
+  return {
+    ok: true,
+    rows: [
+      { ...a, employeeId: b.employeeId },
+      { ...b, employeeId: a.employeeId },
+    ],
+  };
+}
+
+/**
+ * Everything wrong with a proposed swap, including what it does to coverage.
+ *
+ * Coverage is a warning rather than a refusal. Two agents trading a Tuesday for
+ * a Thursday is their business; leaving Thursday two short is the lead's, and
+ * the lead is the one approving. Refusing outright would push the swap back to
+ * WhatsApp, which is the situation this replaces.
+ *
+ * @returns {{problems: string[], warnings: string[]}}
+ */
+export function checkSwap(a, b, { plan = null, roster = [], width = 30 } = {}) {
+  const problems = [];
+  const warnings = [];
+  const p = swapPlan(a, b);
+  if (!p.ok) return { problems: [p.reason], warnings };
+
+  /* A clash is a refusal, not a warning: an agent cannot be on two shifts at
+     once, and a roster that says otherwise is one nobody can work. */
+  const others = roster.filter((r) => r.id !== a.id && r.id !== b.id);
+  const clashes = findClashes([...others, ...p.rows]);
+  for (const c of clashes) problems.push(c.reason ?? "That would double-book someone.");
+
+  if (plan) {
+    for (const row of p.rows) {
+      const cover = coverageOf(row, width);
+      if (!cover.length) warnings.push(`${row.date} has no covered intervals after the swap.`);
+    }
+  }
+  return { problems, warnings };
+}

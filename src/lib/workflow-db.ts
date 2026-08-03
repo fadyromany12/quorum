@@ -20,7 +20,9 @@ import {
 import { todayStr } from "./dates.js";
 import { recordGrant } from "./leave-db";
 import { verifiedChangeSet } from "./profile-policy.js";
+import { swapPlan } from "./schedule.js";
 import { writePii } from "./employee-db";
+import { writeAudit } from "./db";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -261,6 +263,35 @@ export async function decideRequest(
       // every other write — a second path to the same columns is a second path
       // to storing them in the clear.
       await writePii(final.subjectId, cs.pii as Record<string, string>);
+    }
+  }
+
+  /* An approved swap moves the two roster rows. Re-checked here rather than
+     trusted from the payload: the request may have sat for two days, and either
+     shift can have been rescheduled, reassigned or deleted in between. A swap
+     that was valid when proposed and is not now must fail loudly rather than
+     write a roster nobody can work. */
+  if (settled && final.type === "shiftSwap" && final.status === "approved") {
+    const payload = (final.payload ?? {}) as { mineId?: string; theirsId?: string };
+    const [mine_, theirs] = await Promise.all([
+      prisma.scheduleEntry.findUnique({ where: { id: String(payload.mineId ?? "") } }),
+      prisma.scheduleEntry.findUnique({ where: { id: String(payload.theirsId ?? "") } }),
+    ]);
+    const plan = swapPlan(mine_, theirs);
+    if (plan.ok) {
+      const moves = plan.rows as Array<{ id: string; employeeId: string }>;
+      await prisma.$transaction(
+        moves.map((r) => prisma.scheduleEntry.update({ where: { id: r.id }, data: { employeeId: r.employeeId } })),
+      );
+    } else {
+      /* Approved but unapplicable. Recorded rather than swallowed — the lead
+         pressed approve and is entitled to know the roster did not move. */
+      await writeAudit({
+        actor: { name: "system", role: "system" },
+        action: "SWAP_NOT_APPLIED",
+        summary: `An approved shift swap could not be applied — ${plan.reason}`,
+        meta: { requestId, reason: plan.reason },
+      });
     }
   }
 
