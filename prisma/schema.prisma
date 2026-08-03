@@ -220,13 +220,13 @@ model Employee {
   fullNameAr    String @default("")
   preferredName String @default("")
 
-  workEmail     String  @unique
-  personalEmail String  @default("")
-  phone         String  @default("")
-  gender        String  @default("") // Male | Female | Undisclosed
-  birthDate     String  @default("") // YYYY-MM-DD, calendar day (see Case.date)
-  addressAr     String  @default("")
-  linkedInUrl   String  @default("")
+  workEmail     String @unique
+  personalEmail String @default("")
+  phone         String @default("")
+  gender        String @default("") // Male | Female | Undisclosed
+  birthDate     String @default("") // YYYY-MM-DD, calendar day (see Case.date)
+  addressAr     String @default("")
+  linkedInUrl   String @default("")
 
   // Placement. account/lob mirror Case so violation history joins cleanly.
   jobTitle   String @default("")
@@ -252,12 +252,12 @@ model Employee {
 
   // Lifecycle. hireDate drives leave accrual tiers and probation; both are
   // calendar days, for the same timezone reasons as Case.date.
-  stage       EmploymentStage @default(Applicant)
-  hireDate    String          @default("")
-  probationEnd String         @default("")
-  exitDate    String          @default("")
-  exitType    ExitType?
-  exitReason  String          @default("")
+  stage        EmploymentStage @default(Applicant)
+  hireDate     String          @default("")
+  probationEnd String          @default("")
+  exitDate     String          @default("")
+  exitType     ExitType?
+  exitReason   String          @default("")
 
   // Equipment issued at onboarding, e.g. ["Laptop","MiFi","Voice Line"].
   // Recorded here so offboarding can assert every item came back.
@@ -278,8 +278,9 @@ model Employee {
   clearance    ClearanceStep[]
   training     TrainingRecord[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  scheduleEntries ScheduleEntry[]
 
   @@index([stage])
   @@index([account, stage])
@@ -333,9 +334,9 @@ model Dependent {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   name           String
-  relation       String @default("") // Spouse | Son | Daughter | Parent
-  birthDate      String @default("")
-  nationalId     String @default("")
+  relation       String  @default("") // Spouse | Son | Daughter | Parent
+  birthDate      String  @default("")
+  nationalId     String  @default("")
   medicalCovered Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -571,7 +572,6 @@ model AttendanceEvent {
   @@index([at])
 }
 
-
 // ─── The leave ledger ────────────────────────────────────────────────────────
 //
 // A balance is never a column; it is the sum of this table. Accruals credit,
@@ -606,23 +606,23 @@ model LeaveLedgerEntry {
   @@index([employeeId, at])
 }
 
-
 // ─── Exit clearance ──────────────────────────────────────────────────────────
 // Sequenced steps with dependencies: equipment cannot be collected before the
 // handover is confirmed. Rows are created when an exit is recorded; the pure
 // rules (src/lib/clearance.js) decide what may be ticked when.
 model ClearanceStep {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   key        String // handover | it-assets | facilities | finance | hr-final
   label      String
-  owner      String @default("") // which function ticks it, for display
-  dependsOn  String @default("") // a step key, or "*" for "everything else"
-  state      String @default("pending") // pending | done
-  doneByName String @default("")
+  owner      String    @default("") // which function ticks it, for display
+  dependsOn  String    @default("") // a step key, or "*" for "everything else"
+  state      String    @default("pending") // pending | done
+  doneByName String    @default("")
   doneAt     DateTime?
-  note       String @default("")
+  note       String    @default("")
+
   @@unique([employeeId, key])
 }
 
@@ -669,10 +669,10 @@ model EmployeeEvent {
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  at DateTime @default(now())
+  at            DateTime @default(now())
   // The calendar day the change takes effect, which is not always the day it
   // was entered — backdated hires and future-dated promotions are routine.
-  effectiveDate String @default("")
+  effectiveDate String   @default("")
 
   // HIRED | STAGE_CHANGED | PROMOTED | PAY_CHANGED | TRANSFERRED | MANAGER_CHANGED
   // | LEAVE_APPROVED | VIOLATION_LOGGED | COACHING_LOGGED | PIP_OPENED
@@ -683,8 +683,8 @@ model EmployeeEvent {
   fromVal String @default("")
   toVal   String @default("")
 
-  actorName String @default("")
-  actorRole String @default("")
+  actorName String  @default("")
+  actorRole String  @default("")
   caseId    String?
   meta      Json    @default("{}")
 
@@ -743,4 +743,121 @@ model AuditLog {
   @@index([at])
   @@index([caseId])
   @@index([action])
+}
+
+// ─── Workforce management ────────────────────────────────────────────────────
+//
+// Three tables carry the plan: what work is expected (Forecast), what shape a
+// working day takes (ShiftPattern), and who is doing what on a given day
+// (ScheduleEntry). Everything else — required staffing, coverage, shrinkage,
+// adherence — is derived by src/lib/wfm.js from those plus the attendance
+// events that already exist. Nothing here stores a computed number, because a
+// stored requirement is a number that silently stops matching its inputs.
+
+// A demand forecast, one row per interval per queue. Volumes and handling times
+// come from the client's ACD reports; this table is the planning copy of them.
+//
+// The interval is stored as its "HH:MM" start label rather than an index, so a
+// row remains readable — and joinable to a schedule — if the planning interval
+// width is ever changed from 30 minutes.
+model Forecast {
+  id       String @id @default(cuid())
+  account  String
+  lob      String @default("")
+  date     String // YYYY-MM-DD, calendar day (see Case.date)
+  // "HH:MM" start of the interval, in the operating time zone.
+  interval String
+
+  contacts   Int
+  ahtSeconds Int
+
+  // Where the numbers came from: client | historical | manual. A manual
+  // override of a client figure is a decision someone made, and the plan should
+  // be able to say who.
+  source    String @default("manual")
+  actorName String @default("")
+  actorRole String @default("")
+  note      String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One forecast per interval per queue. Re-importing a day updates in place
+  // rather than doubling its volume — the failure mode that makes a planner
+  // stop trusting an import.
+  @@unique([account, lob, date, interval])
+  @@index([account, date])
+}
+
+// A named working pattern — "Early 8-4", "Split 10-7". Patterns exist so a
+// schedule can be built by assigning a shape rather than typing two times four
+// hundred times, and so changing a shift's break structure is one edit.
+model ShiftPattern {
+  id      String @id @default(cuid())
+  name    String @unique
+  // Scope. Empty means it is available to every account.
+  account String @default("")
+  lob     String @default("")
+
+  startTime       String // "HH:MM" local
+  // Minutes, not an end time: a shift crossing midnight has an end time that
+  // sorts before its start, and every comparison against it then needs a
+  // special case. A duration has no such edge.
+  durationMinutes Int
+
+  // Paid break and unpaid meal minutes inside the duration. Both matter and
+  // they are not interchangeable: paid breaks are shrinkage but still cost
+  // wages, unpaid meals are neither.
+  paidBreakMinutes   Int @default(30)
+  unpaidBreakMinutes Int @default(30)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries ScheduleEntry[]
+
+  @@index([account, active])
+}
+
+// One person, one day, one planned activity. A day off is a row rather than an
+// absent row: "nobody scheduled them" and "they are off" are different states,
+// and only one of them is a mistake worth flagging.
+model ScheduleEntry {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  date String // YYYY-MM-DD
+
+  // Shift | Training | Meeting | Leave | Off | Overtime. Validated against
+  // SCHEDULE_ACTIVITIES in the engine rather than as an enum, so operations can
+  // add one without a migration — the same choice AttendanceEvent.aux makes.
+  activity String @default("Shift")
+
+  // Set from the pattern when one is used, and copied rather than referenced so
+  // that editing a pattern next quarter cannot silently rewrite last month's
+  // published schedule. A published roster is a promise about specific hours.
+  startTime       String @default("")
+  durationMinutes Int    @default(0)
+
+  patternId String?
+  pattern   ShiftPattern? @relation(fields: [patternId], references: [id], onDelete: SetNull)
+
+  // Published schedules are visible to the agent; drafts are not. A schedule an
+  // agent can see is a schedule they will plan their life around, so making it
+  // visible has to be a deliberate act.
+  published Boolean @default(false)
+
+  note      String   @default("")
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One planned activity per person per day per start time — a split shift is
+  // two rows, an accidental double-save is one.
+  @@unique([employeeId, date, startTime])
+  @@index([date, published])
+  @@index([employeeId, date])
 }
