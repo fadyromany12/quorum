@@ -15,13 +15,14 @@
    in someone's head. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Gauge, TriangleAlert, CircleCheck, Info, Upload, RefreshCw } from "lucide-react";
+import { CalendarDays, Gauge, TriangleAlert, CircleCheck, Info, Upload, RefreshCw, Users } from "lucide-react";
 
 import { P, alpha } from "../lib/tokens.js";
 import { todayStr } from "../lib/dates.js";
 import { SectionTitle, Muted, BtnGhost, BtnPrimary, TInput, TSelect, Label, Field } from "./ui/index.jsx";
 import Tip from "./ui/Tip.jsx";
 import { lobsFor } from "../lib/org.js";
+import RosterEditor from "./RosterEditor.jsx";
 import { DEFAULT_INTERVAL } from "../lib/wfm.js";
 
 const pct = (x) => `${Math.round((x ?? 0) * 100)}%`;
@@ -51,6 +52,11 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
   const [error, setError] = useState("");
   const [paste, setPaste] = useState("");
   const [showImport, setShowImport] = useState(false);
+  /* Two views over the same day rather than two screens. Building the roster
+     and judging it are the same task ten seconds apart, and making them
+     separate places means carrying the account, line and date across both and
+     hoping they still agree. */
+  const [view, setView] = useState("plan");
 
   const lobs = useMemo(() => lobsFor(accounts, account), [accounts, account]);
 
@@ -177,10 +183,26 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
           </Field>
         </div>
         <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <div className="inline-flex" style={{ border: `1px solid ${P.line}`, borderRadius: 8, overflow: "hidden" }}>
+            {[["plan", "Plan", Gauge], ["roster", "Roster", Users]].map(([id, label, Icon]) => (
+              <button
+                key={id}
+                onClick={() => setView(id)}
+                className="ao-disp uppercase tracking-wide font-semibold inline-flex items-center gap-1.5 transition"
+                style={{
+                  fontSize: 11.5, padding: "8px 14px", border: "none", cursor: "pointer",
+                  background: view === id ? P.petrol : "transparent",
+                  color: view === id ? "#fff" : P.sub,
+                }}
+              >
+                <Icon size={12} />{label}
+              </button>
+            ))}
+          </div>
           <Tip label="Recompute from the stored forecast and the current roster">
             <BtnGhost icon={RefreshCw} onClick={load} disabled={busy}>Refresh</BtnGhost>
           </Tip>
-          {canWrite && (
+          {canWrite && view === "plan" && (
             <BtnGhost icon={Upload} onClick={() => setShowImport((v) => !v)}>
               {showImport ? "Cancel import" : "Load a forecast"}
             </BtnGhost>
@@ -189,7 +211,7 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
           <Muted>Changing a target here changes nothing stored — it re-asks the question.</Muted>
         </div>
 
-        {showImport && (
+        {showImport && view === "plan" && (
           <div className="mt-3 ao-rise">
             <Label>Paste three columns: time, contacts, handling time in seconds</Label>
             <textarea
@@ -213,14 +235,21 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
         )}
       </div>
 
-      {error && (
+      {view === "roster" && canRoster && (
+        <RosterEditor account={account} lob={lob} date={date} onSaved={load} />
+      )}
+      {view === "roster" && !canRoster && (
+        <Muted>Your role can read the plan but not change the roster — WFM and Operations Leads build it.</Muted>
+      )}
+
+      {view === "plan" && error && (
         <div className="flex items-start gap-2 p-3" style={{ background: P.brickWash, border: `1px solid ${alpha(P.brick, 0.4)}`, borderRadius: 8 }} role="alert">
           <TriangleAlert size={15} color={P.brick} style={{ flexShrink: 0, marginTop: 1 }} />
           <span style={{ fontSize: 13, color: P.inkSoft }}>{error}</span>
         </div>
       )}
 
-      {data?.problems?.length > 0 && (
+      {view === "plan" && data?.problems?.length > 0 && (
         <div className="p-3" style={{ background: P.amberWash, border: `1px solid ${alpha(P.amber, 0.4)}`, borderRadius: 8 }}>
           <div className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 10.5, color: P.amber }}>
             The forecast cannot be planned from
@@ -231,7 +260,7 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
         </div>
       )}
 
-      {data && data.forecast.length === 0 && !data.problems.length && (
+      {view === "plan" && data && data.forecast.length === 0 && !data.problems.length && (
         <div className="p-6 text-center" style={{ background: P.card, border: `1px dashed ${P.line}`, borderRadius: 12 }}>
           <CalendarDays size={22} color={P.sub} />
           <div className="ao-disp font-semibold mt-2" style={{ fontSize: 14 }}>No forecast for this day</div>
@@ -243,7 +272,7 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
         </div>
       )}
 
-      {rows.length > 0 && (
+      {view === "plan" && rows.length > 0 && (
         <>
           {/* ── Headline ── */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -282,7 +311,7 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
           {/* ── The strip ── */}
           <div className="p-4" style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 12 }}>
             <div className="flex items-center gap-2" style={{ marginBottom: 10 }}>
-              <Gauge size={14} color={P.signal} />
+              <Gauge size={14} color={P.petrol} />
               <span className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 10.5, letterSpacing: 0.9, color: P.sub }}>
                 Coverage through the day
               </span>
@@ -342,7 +371,7 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
           {data.explanation?.length > 0 && (
             <div className="p-4" style={{ background: "var(--mist)", borderRadius: 12 }}>
               <div className="flex items-center gap-2" style={{ marginBottom: 6 }}>
-                <Info size={13} color={P.signal} />
+                <Info size={13} color={P.petrol} />
                 <span className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 10.5, letterSpacing: 0.9, color: P.sub }}>
                   Why the busiest interval asks for what it does
                 </span>

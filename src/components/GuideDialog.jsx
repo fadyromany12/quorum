@@ -84,7 +84,7 @@ export default function GuideDialog({ role, open, onClose }) {
       <header className="flex items-start gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${P.line}`, flexShrink: 0 }}>
         <span
           className="flex items-center justify-center"
-          style={{ width: 34, height: 34, borderRadius: 10, background: "var(--signal-soft)", color: P.signal, flexShrink: 0 }}
+          style={{ width: 34, height: 34, borderRadius: 10, background: "var(--signal-soft)", color: P.petrol, flexShrink: 0 }}
         >
           <Compass size={17} />
         </span>
@@ -111,7 +111,7 @@ export default function GuideDialog({ role, open, onClose }) {
           return (
             <section key={g.id} className="ao-rise" style={{ animationDelay: `${Math.min(gi, 6) * 45}ms` }}>
               <div className="flex items-center gap-2" style={{ marginBottom: 6 }}>
-                <Icon size={13} color={P.signal} />
+                <Icon size={13} color={P.petrol} />
                 <span className="ao-disp uppercase tracking-wide font-semibold" style={{ fontSize: 10, letterSpacing: 0.9, color: P.sub }}>
                   {g.group}
                 </span>
@@ -149,7 +149,7 @@ export default function GuideDialog({ role, open, onClose }) {
           className="ao-disp font-semibold ao-glow"
           style={{
             border: "none",
-            background: P.signal,
+            background: P.petrol,
             color: "#fff",
             borderRadius: 8,
             padding: "8px 16px",
