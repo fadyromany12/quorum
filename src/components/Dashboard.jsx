@@ -488,7 +488,12 @@ function TrendBars({ weekly }) {
        overflow property was already right; the container simply could not get
        small enough to need it. */
     <div style={{ overflowX: "auto", minWidth: 0, maxWidth: "100%" }}>
-      <svg viewBox={`0 0 ${W} ${H + 30}`} style={{ width: "100%", minWidth: 480 }} role="img" aria-label="Cases per week, last 8 weeks">
+      {/* min(480px, 100%) rather than a flat 480: the floor exists so the chart
+          is not cramped on a desktop, and on a 390px phone insisting on it is
+          what made the whole page scroll sideways. An SVG scales through its
+          viewBox, so below 480 it simply gets smaller — a chart that fits beats
+          a page that moves under your thumb. */}
+      <svg viewBox={`0 0 ${W} ${H + 30}`} style={{ width: "100%", minWidth: "min(480px, 100%)" }} role="img" aria-label="Cases per week, last 8 weeks">
         {[0.25, 0.5, 0.75].map((f) => (
           <line key={f} x1={pad} x2={W - pad} y1={H - H * f} y2={H - H * f} stroke="var(--deep-well)" strokeWidth="1" />
         ))}
