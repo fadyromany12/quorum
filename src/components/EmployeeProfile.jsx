@@ -30,6 +30,7 @@ import {
   isVoluntaryExit, attritionClass,
 } from "../lib/taxonomy.js";
 import { TRAINING_TYPES } from "../lib/taxonomy.js";
+import { LEDGER_TYPES } from "../lib/leave.js";
 import { Avatar, StageChip } from "./People.jsx";
 
 /* Each timeline type gets an icon and a colour so the record can be skimmed —
@@ -404,6 +405,11 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
           the journey — and readiness is the answer operations wants first. */}
       <TrainingPanel employeeId={employeeId} onChanged={load} />
 
+      {/* Leave: the balance, the ledger it comes from, and HR's correction
+          entry. Above pay because it is read far more often — "how many days
+          do they have left" is a daily question and a salary is not. */}
+      <LeavePanel employeeId={employeeId} />
+
       {/* Pay. Behind the same reveal as the identifiers, and for the same
           reason: it is the fact most likely to be misused if it travels
           further than it needs to. */}
@@ -762,6 +768,191 @@ function TrainingPanel({ employeeId, onChanged }) {
    last March" is a question payroll, an auditor and a labour court all ask, and
    a field that overwrites cannot answer it at all — so the history is the
    feature and the current figure is just its first row. */
+/* Leave: the balance, the ledger it is derived from, and HR's way in.
+
+   The balance is shown with its derivation rather than on its own, because the
+   number is a sum of rows and every argument about leave is really an argument
+   about one of those rows. A figure with no working is something to dispute; a
+   figure with the ledger under it is something to check.
+
+   Corrections are appended, never edited — the same reason pay is versioned. So
+   the form adds a row and the running total moves; nothing already written
+   changes, and "why is my balance different from last month" stays answerable.
+
+   Which corrections are offered, and whether this person may make any, both
+   come from the API. A component holding its own copy of either would be a
+   second opinion about permissions and vocabulary, and the second opinion is
+   the one still showing a button months after the permission moved. */
+function LeavePanel({ employeeId }) {
+  const [data, setData] = useState(null);
+  const [message, setMessage] = useState("");
+  const [showLedger, setShowLedger] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({ type: "adjustment", days: "", note: "", effectiveDate: todayStr() });
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/leave`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not load the leave ledger.");
+      setData(json);
+    } catch (e) {
+      setMessage(e.message);
+    }
+  }, [employeeId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const chosen = data?.types?.find((t) => t.code === form.type);
+  /* The note requirement is the API's rule, surfaced early. Letting someone type
+     a correction and only then be told it needs a reason is the same amount of
+     validation delivered at the least useful moment. */
+  const needsNote = !!chosen?.needsNote && !form.note.trim();
+
+  const save = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/leave`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...form, days: Number(form.days) }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "The correction was refused.");
+      setAdding(false);
+      setForm({ type: "adjustment", days: "", note: "", effectiveDate: todayStr() });
+      setData(json.balance !== undefined ? { ...data, ...json } : data);
+      await load();
+      setShowLedger(true);
+    } catch (e) {
+      setMessage(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!data) {
+    return (
+      <Card title={<span className="inline-flex items-center gap-2"><CalendarDays size={14} />Leave</span>}>
+        <Muted>{message || "Loading…"}</Muted>
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      title={<span className="inline-flex items-center gap-2"><CalendarDays size={14} />Leave</span>}
+      right={
+        <span className="ao-mono" style={{ fontSize: 11, color: P.sub }}>
+          {plural(data.entries?.length ?? 0, "entry", "entries")}
+        </span>
+      }
+    >
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="ao-mono" style={{ fontSize: 26, fontWeight: 700, color: data.balance < 0 ? P.brick : P.ink }}>
+          {data.balance}
+        </span>
+        <Muted>days available</Muted>
+        <span style={{ fontSize: 12, color: P.sub }}>
+          {data.credited} credited · {data.debited} taken
+        </span>
+        <span className="ms-auto flex gap-2">
+          <BtnGhost onClick={() => setShowLedger((v) => !v)}>
+            {showLedger ? "Hide working" : "Show working"}
+          </BtnGhost>
+          {data.canAdjust && !adding && (
+            <BtnGhost icon={Plus} onClick={() => setAdding(true)}>Correct</BtnGhost>
+          )}
+        </span>
+      </div>
+
+      {message && <div className="mt-2" style={{ fontSize: 12.5, color: P.brick }}>{message}</div>}
+
+      {/* ── The correction form ── */}
+      {adding && (
+        <div className="mt-3 p-3" style={{ background: P.mist, borderRadius: 8, border: `1px solid ${P.line}` }}>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Field label="Kind">
+              <TSelect value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
+                {data.types.map((t) => (
+                  <option key={t.code} value={t.code}>{t.label}</option>
+                ))}
+              </TSelect>
+            </Field>
+            <Field label="Days">
+              {/* Signed on purpose. An opening balance is +14 and a correction
+                  for a day taken and never debited is −1; a form that only took
+                  a magnitude would need a direction control saying the same
+                  thing twice. */}
+              <TInput
+                type="number"
+                step="0.5"
+                placeholder="+14 or −1"
+                value={form.days}
+                onChange={(e) => setForm((f) => ({ ...f, days: e.target.value }))}
+              />
+            </Field>
+            <Field label="Effective from">
+              <TInput
+                type="date"
+                value={form.effectiveDate}
+                onChange={(e) => setForm((f) => ({ ...f, effectiveDate: e.target.value }))}
+              />
+            </Field>
+            <Field label="Reason">
+              <TInput
+                placeholder="Opening balance at go-live"
+                value={form.note}
+                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              />
+            </Field>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <BtnPrimary onClick={save} disabled={busy || !form.days || needsNote}>
+              {busy ? "Recording…" : "Record correction"}
+            </BtnPrimary>
+            <BtnGhost onClick={() => { setAdding(false); setMessage(""); }}>Cancel</BtnGhost>
+            <Muted>
+              {needsNote
+                ? `A ${chosen?.label?.toLowerCase()} can go either way, so it has to say why.`
+                : "Appended to the ledger and recorded against your name."}
+            </Muted>
+          </div>
+        </div>
+      )}
+
+      {/* ── The derivation ── */}
+      {showLedger && (
+        <div className="mt-3 grid gap-1">
+          {(data.entries ?? []).length === 0 && <Muted>No entries yet.</Muted>}
+          {(data.entries ?? []).map((e) => (
+            <div
+              key={e.id}
+              className="flex flex-wrap items-baseline gap-2 py-1"
+              style={{ fontSize: 12.5, borderBottom: `1px solid ${P.line}` }}
+            >
+              <span className="ao-mono" style={{ color: P.sub, minWidth: 84 }}>{e.effectiveDate}</span>
+              <span
+                className="ao-mono"
+                style={{ minWidth: 52, textAlign: "end", color: e.days < 0 ? P.brick : P.green, fontWeight: 600 }}
+              >
+                {e.days > 0 ? "+" : ""}{e.days}
+              </span>
+              <span style={{ color: P.ink }}>{LEDGER_TYPES[e.type]?.label ?? e.type}</span>
+              {e.note && <span style={{ color: P.sub }}>— {e.note}</span>}
+              {e.actorName && e.actorName !== "system" && (
+                <span className="ms-auto" style={{ color: P.sub, fontSize: 11.5 }}>{e.actorName}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function PayPanel({ employeeId, onChanged }) {
   const [state, setState] = useState("idle"); // idle | loading | shown | denied | error
   const [data, setData] = useState(null);
