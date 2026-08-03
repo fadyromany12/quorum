@@ -164,5 +164,48 @@ ok("nothing both covers the queue and counts as shrinkage",
 ok("every activity has a label in both languages",
   S.ACTIVITY_LIST.every((a) => S.SCHEDULE_ACTIVITIES[a].label && S.SCHEDULE_ACTIVITIES[a].labelAr));
 
+console.log("\n── What one absence does to the plan ──");
+{
+  /* Four people covering an interval that needs four. Removing one makes it
+     short; removing someone who was not rostered changes nothing. */
+  const day = [
+    shift("09:00", 480, { employeeId: "a" }),
+    shift("09:00", 480, { employeeId: "b" }),
+    shift("09:00", 480, { employeeId: "c" }),
+    shift("09:00", 480, { employeeId: "d" }),
+  ];
+  const need = [{ interval: "09:00", rostered: 4 }, { interval: "09:30", rostered: 4 }, { interval: "20:00", rostered: 1 }];
+
+  const one = S.absenceImpact({ plan: need, roster: day, employeeId: "a" });
+  ok("the intervals they cover are named", one.affected.includes("09:00") && one.affected.length === 16);
+  ok("removing them makes a covered interval short", one.coverable === false);
+  ok("and the count is of intervals this absence caused", one.causedByThis === 2);
+  ok("the verdict is a sentence naming the worst interval", /09:00/.test(one.verdict) && /short/.test(one.verdict));
+
+  const spare = [...day, shift("09:00", 480, { employeeId: "e" })];
+  const ok2 = S.absenceImpact({ plan: need, roster: spare, employeeId: "a" });
+  ok("with one spare, the same absence is coverable", ok2.coverable === true);
+  ok("and the verdict says so", /Covered without them/.test(ok2.verdict));
+
+  const off = S.absenceImpact({ plan: need, roster: day, employeeId: "zzz" });
+  ok("someone not rostered affects nothing", off.affected.length === 0 && off.coverable === true);
+  ok("and is told so plainly", /not rostered/.test(off.verdict));
+
+  /* The property that stops approvers ignoring the warning: a gap that exists
+     before the request is not reported as caused by it. */
+  const thin = [shift("09:00", 480, { employeeId: "a" })];
+  const heavy = [{ interval: "09:00", rostered: 9 }, { interval: "09:30", rostered: 9 }];
+  const already = S.absenceImpact({ plan: heavy, roster: thin, employeeId: "a" });
+  ok("an interval already short is listed as already short", already.alreadyShort.length > 0);
+  ok("and is not blamed on this request", already.causedByThis === 0 && already.coverable === true);
+  ok("the verdict says the request is not what broke it", /already short/.test(already.verdict));
+
+  /* Leave already on the roster covers nothing, so removing it changes nothing
+     — which is what makes this safe to call on a day that is already booked. */
+  const booked = [...day, shift("09:00", 480, { employeeId: "f", activity: "Leave" })];
+  ok("removing someone already on leave changes no interval",
+    S.absenceImpact({ plan: need, roster: booked, employeeId: "f" }).affected.length === 0);
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

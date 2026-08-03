@@ -28,7 +28,7 @@
    it genuinely is half-covered — and rounding it away is how a half-hour of
    understaffing disappears from a report. */
 
-import { intervalLabel, intervalOf, DEFAULT_INTERVAL, intervalsPerDay } from "./wfm.js";
+import { intervalLabel, DEFAULT_INTERVAL, intervalsPerDay, coverage } from "./wfm.js";
 
 /**
  * What a person can be scheduled to do.
@@ -277,4 +277,72 @@ export function findClashes(rows) {
     }
   }
   return clashes;
+}
+
+/* ── What one absence does to the plan ──────────────────────────────────────
+
+   The question an approver is actually answering when they look at a leave
+   request is "can we cover this day without them", and until now the honest
+   answer has been a guess. The roster already contains the person, so the exact
+   answer is available: recompute coverage with their rows removed and look at
+   the intervals they would have been covering.
+
+   Two things this is careful not to be:
+
+     · It is not a veto. Annual leave is a statutory entitlement under Egyptian
+       Labour Law, and a staffing model does not get to overrule it. The verdict
+       is advice attached to a decision a human still makes — which is why the
+       return value is a sentence and a tightest interval rather than a boolean
+       the UI could quietly wire to a disabled button.
+
+     · It does not blame the requester for a gap that already exists. An
+       interval short before the request is short regardless of the answer, and
+       reporting it as the request's impact would teach approvers to ignore the
+       warning entirely. Those are reported separately. */
+
+/**
+ * @param {object} p
+ * @param {Array<{interval: string, rostered: number}>} p.plan the day's requirement
+ * @param {Array<object>} p.roster every schedule row for the day, including theirs
+ * @param {string} p.employeeId who would be absent
+ * @param {number} [p.width]
+ * @returns {{affected: string[], tightest: object|null, wouldBeShort: object[],
+ *            alreadyShort: string[], causedByThis: number, verdict: string, coverable: boolean}}
+ */
+export function absenceImpact({ plan, roster, employeeId, width = 30 }) {
+  const all = roster ?? [];
+  const theirs = all.filter((r) => r.employeeId === employeeId);
+  const affected = [...new Set(theirs.flatMap((r) => coverageOf(r, width).map((c) => c.interval)))].sort();
+
+  const before = coverage(plan, scheduledByInterval(all, width));
+  const after = coverage(plan, scheduledByInterval(all.filter((r) => r.employeeId !== employeeId), width));
+
+  const alreadyShort = before.rows.filter((r) => r.state === "under" && affected.includes(r.interval)).map((r) => r.interval);
+  const wouldBeShort = after.rows.filter((r) => r.state === "under" && affected.includes(r.interval));
+  /* Intervals this specific absence pushes under — the ones the approver can
+     still do something about by moving the day. */
+  const causedByThis = wouldBeShort.filter((r) => !alreadyShort.includes(r.interval)).length;
+  const tightest = affected.length
+    ? after.rows.filter((r) => affected.includes(r.interval)).reduce((w, r) => (w === null || r.difference < w.difference ? r : w), null)
+    : null;
+
+  let verdict;
+  if (affected.length === 0) verdict = "They are not rostered on the queue that day, so cover is unaffected.";
+  else if (causedByThis === 0 && wouldBeShort.length === 0) {
+    verdict = `Covered without them — ${tightest.interval} is the tightest at ${Math.round(tightest.difference * 10) / 10} spare.`;
+  } else if (causedByThis === 0) {
+    verdict = `${wouldBeShort.length} of their intervals are already short before this request; approving it does not make any interval short that was not already.`;
+  } else {
+    verdict = `Approving leaves ${causedByThis} interval${causedByThis === 1 ? "" : "s"} short that would otherwise be covered — worst is ${tightest.interval}, ${Math.round(-tightest.difference * 10) / 10} under.`;
+  }
+
+  return {
+    affected,
+    tightest,
+    wouldBeShort,
+    alreadyShort,
+    causedByThis,
+    verdict,
+    coverable: causedByThis === 0,
+  };
 }

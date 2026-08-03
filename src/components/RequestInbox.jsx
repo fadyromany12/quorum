@@ -15,9 +15,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CheckCheck, RefreshCw, Clock, TriangleAlert, UserCheck, X, Check,
-  CalendarDays, Users2, Scale, Gavel, FileText, ArrowRightLeft, UserMinus, Landmark,
+  CalendarDays, Users2, Scale, Gavel, FileText, ArrowRightLeft, UserMinus, Landmark, Gauge,
 } from "lucide-react";
 import { Card, Pill, Muted, BtnGhost, BtnPrimary, TInput } from "./ui/index.jsx";
+import Tip from "./ui/Tip.jsx";
 import { P } from "../lib/tokens.js";
 import { plural } from "../lib/format.js";
 import { displayName } from "../lib/employee.js";
@@ -47,6 +48,25 @@ function InboxItem({ item, onDecided, onError }) {
   const [proposal, setProposal] = useState(r.proposedValue ?? "");
   const [busy, setBusy] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+
+  /* What approving this would do to cover. Advisory: the request is for dated
+     absence, so the only thing worth asking is whether the floor holds without
+     them — and the answer is only fetched for requests that actually have
+     dates, because there is nothing to ask about a salary letter. */
+  const [impact, setImpact] = useState(null);
+  useEffect(() => {
+    if (!r.payload?.from || !r.subject?.id) return;
+    let live = true;
+    const q = new URLSearchParams({ employeeId: r.subject.id, from: r.payload.from, to: r.payload.to || r.payload.from });
+    fetch(`/api/wfm/impact?${q}`)
+      .then((res) => (res.ok ? res.json() : null))
+      /* A 403 here is normal — an approver without wfmRead simply does not see
+         the line. Failing quiet is right: cover advice is a bonus on a screen
+         whose actual job is the decision. */
+      .then((j) => live && j && setImpact(j))
+      .catch(() => {});
+    return () => { live = false; };
+  }, [r.payload?.from, r.payload?.to, r.subject?.id]);
 
   const send = async (decision) => {
     setBusy(true);
@@ -117,6 +137,31 @@ function InboxItem({ item, onDecided, onError }) {
             <div className="mt-0.5" style={{ fontSize: 12.5, color: P.sub, overflowWrap: "anywhere" }}>
               “{r.payload.reason}”
             </div>
+          )}
+
+          {/* Cover advice. Never a veto — the button stays enabled either way,
+              and an approver who knows something the roster does not is right
+              more often than the roster is. */}
+          {impact && (
+            <Tip
+              label={
+                impact.unplannedDays
+                  ? `${impact.plannedDays} day(s) planned, ${impact.unplannedDays} with no forecast to judge against`
+                  : impact.days.find((d) => d.coverable === false)?.verdict || impact.days[0]?.verdict || ""
+              }
+            >
+              <div
+                className="mt-1.5 inline-flex items-start gap-1.5"
+                style={{
+                  fontSize: 11.5,
+                  lineHeight: 1.45,
+                  color: impact.plannedDays === 0 ? P.sub : impact.coverable ? P.green : P.amber,
+                }}
+              >
+                <Gauge size={12} style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>{impact.headline}</span>
+              </div>
+            </Tip>
           )}
         </div>
 
