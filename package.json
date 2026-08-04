@@ -15,6 +15,8 @@
     "db:stop": "node scripts/devdb.mjs stop",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.mjs",
+    "unlock": "node scripts/break-glass.mjs unlock",
+    "reset-password": "node scripts/break-glass.mjs reset",
     "key:gen": "node -e \"console.log(require('./src/lib/pii-crypto.js').generateKey())\""
   },
   "dependencies": {
