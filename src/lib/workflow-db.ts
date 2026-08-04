@@ -23,6 +23,7 @@ import { verifiedChangeSet } from "./profile-policy.js";
 import { swapPlan, overtimeRow } from "./schedule.js";
 import { promotionEffects } from "./promotion.js";
 import { movePlan, moveEffects, nameOf } from "./hierarchy.js";
+import { routeFor, goesStraightToHr } from "./escalation.js";
 import { PAY_REASONS } from "./comp.js";
 import { writePii } from "./employee-db";
 import { writeAudit } from "./db";
@@ -174,9 +175,35 @@ export async function raiseRequest(
     }),
   ]);
 
+  /* An escalation's audience is the skip level, or HR for the categories that
+     must not touch the line at all. Resolved here because it needs the chart —
+     chainFor is pure and only ever sees the subject's own record. */
+  let audienceIds: string[] = [];
+  if (input.type === "escalation") {
+    const category = String((input.payload as Record<string, unknown> | undefined)?.category ?? "");
+    const manager = subject.directManagerId
+      ? await prisma.employee.findUnique({ where: { id: subject.directManagerId }, select: { directManagerId: true } })
+      : null;
+    const route = routeFor(category, { ...subject, skipManagerId: manager?.directManagerId ?? "" }, hr.map((e) => e.id));
+    if (!route.ok) return { ok: false as const, status: 409, reason: route.reason };
+    audienceIds = route.audience;
+    /* The one thing that must never happen: the person it is about hearing
+       about it. Belt and braces over routeFor, because this is the assertion
+       somebody's job depends on. */
+    const forbidden = [subject.directManagerId, subject.functionalManagerId, subject.dottedManagerId].filter(Boolean);
+    audienceIds = audienceIds.filter((id) => !forbidden.includes(id));
+    if (!audienceIds.length) {
+      return { ok: false as const, status: 409, reason: "There is nobody who can hear this without your own manager being involved. Contact HR directly." };
+    }
+    if (goesStraightToHr(category) && !hr.length) {
+      return { ok: false as const, status: 409, reason: "No HR contact is configured, so this cannot be raised safely." };
+    }
+  }
+
   const chain = chainFor(input.type, subject, {
     hrIds: hr.map((e) => e.id),
     financeIds: fin.map((e) => e.id),
+    audienceIds,
     /* The manager who would gain them is not on the subject's record yet —
        that is the request — so it comes from the payload for the one chain
        that needs it. */
@@ -581,7 +608,16 @@ export async function myRequests(employeeId: string, limit = 50) {
 
 /** Open requests past their SLA, worst first. For the escalation job and view. */
 export async function overdue() {
-  const rows = await prisma.request.findMany({ where: OPEN, select: REQUEST_SELECT });
+  /* Escalations are excluded from every team-wide list, and this is the one
+     that would have leaked. The overdue view is reachable by anyone holding
+     `triage` — which includes a Project Manager, who may well be the person an
+     escalation is about. A row saying "Escalation · Nour Said · 4 days
+     overdue" tells them everything without them ever opening it.
+     Their audience sees them in their own inbox, and nowhere else. */
+  const rows = await prisma.request.findMany({
+    where: { ...OPEN, type: { not: "escalation" } },
+    select: REQUEST_SELECT,
+  });
   const today = todayStr();
   return escalations(rows.map(toRequest), today).map((e) => ({
     ...e,

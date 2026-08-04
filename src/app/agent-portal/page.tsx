@@ -18,6 +18,7 @@ import SwapShift from "@/components/portal/SwapShift";
 import MySchedule from "@/components/portal/MySchedule";
 import NotificationSettings from "@/components/NotificationSettings";
 import MyTraining from "@/components/portal/MyTraining";
+import RaiseEscalation from "@/components/portal/RaiseEscalation";
 import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
@@ -136,6 +137,11 @@ export default async function AgentPortalPage() {
           and the completeness warning on it can be the reason payroll has not
           been able to pay them. */}
       <MyProfile />
+
+      {/* Quiet, and near the bottom. A prominent "report your manager"
+          button on a portal somebody opens on the floor is a button nobody
+          presses — but it has to be findable without asking anyone where it is. */}
+      <RaiseEscalation />
 
       {/* Last, because it is a setting rather than a thing to do — but on this
           page rather than buried, because the people who most need telling are

@@ -29,6 +29,7 @@
 import { addDays, daysBetween, todayStr } from "./dates.js";
 import { approvalChain } from "./employee.js";
 import { LEAVE_CODES, exitReasonsFor } from "./taxonomy.js";
+import { ESCALATION_CODES } from "./escalation.js";
 
 /* ── Request types ──────────────────────────────────────────────────────────
    `consequence` is shown at the point of submission. An action with a side
@@ -174,6 +175,27 @@ export const REQUEST_TYPES = {
     slaDays: 5,
     consequence: "Moves them — and anyone reporting to them — under a different manager, which changes who approves their leave and who can see their record.",
   },
+  /* Raising something above your manager — including about them.
+
+     Every other type here is addressed to the direct manager, which is right
+     for almost everything and catastrophic for the one case where the manager
+     is the problem. This one routes on the *skip* level, and its audience is
+     computed in escalation.js rather than from the subject's chain.
+
+     Confidential rather than anonymous: it names the person raising it, because
+     nothing can be investigated otherwise, and the manager is not in the
+     audience and never appears in a list that would tell them it exists. */
+  escalation: {
+    label: "Escalation",
+    chain: "skipLevel",
+    slaDays: 3,
+    subjectIsRequester: true,
+    /* Not withdrawable. Somebody who raises a grievance and is then persuaded
+       to withdraw it has usually been persuaded by the person it is about. HR
+       closes it with an outcome instead, which leaves a record either way. */
+    confidential: true,
+    consequence: "Goes to your manager's manager, or straight to HR. Your own manager is not told.",
+  },
   shiftSwap: {
     label: "Shift swap",
     chain: "directOnly",
@@ -215,7 +237,7 @@ export const STEP_STATES = ["pending", "approved", "rejected", "skipped"];
  *
  * @param {string} type
  * @param {{directManagerId?: string|null, functionalManagerId?: string|null, dottedManagerId?: string|null}} subject
- * @param {{hrIds?: string[], financeIds?: string[], gainingManagerId?: string}} [roles]
+ * @param {{hrIds?: string[], financeIds?: string[], gainingManagerId?: string, audienceIds?: string[]}} [roles]
  * @returns {{ok: true, steps: Step[]} | {ok: false, reason: string}}
  */
 export function chainFor(type, subject, roles = {}) {
@@ -269,6 +291,18 @@ export function chainFor(type, subject, roles = {}) {
     if (losing === gaining) return { ok: false, reason: "That is the manager they already report to." };
     const ids = [losing, gaining].filter(Boolean);
     return { ok: true, steps: ids.map((id) => step(id, 0, "co")) };
+  }
+
+  if (cfg.chain === "skipLevel") {
+    /* The audience is worked out by escalation.js, which knows that harassment
+       and safety bypass the line entirely — a rule that has nothing to do with
+       the subject's reporting chain and everything to do with the category. */
+    const audience = roles.audienceIds || [];
+    if (!audience.length) {
+      return { ok: false, reason: "There is nobody above your manager and no HR contact configured, so this cannot be raised safely." };
+    }
+    // Any one of them may act; the rest are marked skipped on decision.
+    return { ok: true, steps: audience.map((id) => step(id, 0, "any")) };
   }
 
   if (cfg.chain === "hrReview") {
@@ -860,6 +894,28 @@ export function checkPayload(type, payload) {
       }
     }
   }
+
+  /* Type-specific rules that an enum list cannot express.
+
+     An escalation with four words of detail cannot be investigated, and the
+     person reading it has no way to ask a follow-up without revealing to the
+     manager that something was raised. The browser checks this too; the browser
+     is not the authority, and a form check alone meant the API accepted
+     "underpaid" as a grievance — caught by testing the endpoint rather than the
+     screen. */
+  if (type === "escalation") {
+    const detail = String(p.detail ?? "").trim();
+    if (!ESCALATION_CODES.includes(String(p.category))) {
+      return { ok: false, reason: "Choose what the escalation is about." };
+    }
+    if (detail.length < 20) {
+      return {
+        ok: false,
+        reason: "Say what happened, with enough detail that somebody can look into it without having to ask your manager.",
+      };
+    }
+  }
+
   return { ok: true };
 }
 
