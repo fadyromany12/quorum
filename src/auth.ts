@@ -2,7 +2,7 @@
    The token carries id / role / empId / mustChange so layouts and API routes
    can authorize without a DB round-trip; sensitive checks still re-read the DB. */
 
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/passwords";
@@ -52,6 +52,12 @@ declare module "next-auth" {
   }
 }
 
+/* Carries a `code` NextAuth passes to the client, so the sign-in form can say
+   something true instead of something misleading. */
+class ThrottledSignin extends CredentialsSignin {
+  code = "throttled";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
@@ -64,12 +70,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = String(creds?.password || "");
         if (!email || !password) return null;
 
-        // Throttle first — a locked-out identifier costs no bcrypt work. The
-        // window lives in Postgres, so it holds across every serverless
-        // instance; a success clears the count.
+        /* Throttle first — a locked-out identifier costs no bcrypt work. The
+           window lives in Postgres, so it holds across every serverless
+           instance; a success clears the count.
+
+           Thrown rather than returned as null, because null is what a wrong
+           password returns and NextAuth renders both identically. A locked-out
+           person then reads "invalid email or password", concludes their
+           password is broken, and keeps trying — which is exactly how the only
+           admin on this deployment lost an evening. The distinction is free of
+           enumeration risk: recordLoginFailure() counts every failed attempt
+           including ones for addresses that do not exist, so an attacker
+           hammering a made-up address is told the same thing. */
         if ((await loginStatus(email)).blocked) {
           await auditLogin("LOGIN_BLOCKED", email, { reason: "rate_limited" });
-          return null;
+          throw new ThrottledSignin();
         }
 
         const user = await prisma.user.findUnique({ where: { email } });
