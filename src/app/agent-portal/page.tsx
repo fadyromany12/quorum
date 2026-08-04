@@ -17,6 +17,7 @@ import MyProfile from "@/components/portal/MyProfile";
 import SwapShift from "@/components/portal/SwapShift";
 import MySchedule from "@/components/portal/MySchedule";
 import NotificationSettings from "@/components/NotificationSettings";
+import MyTraining from "@/components/portal/MyTraining";
 import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
@@ -102,6 +103,11 @@ export default async function AgentPortalPage() {
           for a change to the days you work — and an agent who cannot get leave
           approved will often try a swap next. */}
       <SwapShift />
+
+      {/* Training, next to the roster rather than the pay: readiness is about
+          whether you can be put on the floor, which is the same subject as when
+          you are on it. */}
+      <MyTraining />
 
       {/* Pay. Below the clock and leave because those are what an agent opens
           this page to *use*; a payslip is something they come looking for once
