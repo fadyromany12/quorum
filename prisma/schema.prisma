@@ -286,6 +286,7 @@ model Employee {
   clearance    ClearanceStep[]
   training     TrainingRecord[]
   documents    EmployeeDocument[]
+  assetsHeld          Asset[]
   recognitionReceived Recognition[] @relation("RecognitionReceived")
   recognitionGiven    Recognition[] @relation("RecognitionGiven")
 
@@ -778,6 +779,65 @@ model PasswordReset {
 // Login throttle state, shared across serverless instances. One row per failed
 // attempt; a sliding window over `at` decides lockout, a success clears the
 // email's rows. Rows age out on the next failure for that email.
+// A thing the company gave somebody and expects back.
+//
+// `Employee.assets` is a JSON array of strings — ["Laptop","MiFi"] — which is
+// enough to print on an onboarding checklist and not enough for anything else.
+// It cannot say which laptop, when it was issued, what condition it came back
+// in, or whether it came back at all. Offboarding therefore asks a human to
+// remember, and the clearance step for IT equipment is somebody's word.
+//
+// Its own table so an item has a life: issued, returned, or written off. Never
+// deleted — "we never gave them one" and "they kept it" are different answers,
+// and the second one has a cost attached.
+model Asset {
+  id String @id @default(cuid())
+
+  // Validated against ASSET_KINDS in the engine rather than as an enum, so a
+  // new headset model does not need a migration.
+  kind String
+
+  // What distinguishes this one from the identical one on the next desk. The
+  // whole reason a JSON array was not enough.
+  serial String @default("")
+  label  String @default("")
+
+  // Who has it, or had it. Kept after the item is closed off: an asset that
+  // vanishes from somebody's record the moment it is returned makes "what
+  // happened to their laptop" unanswerable at exactly the point somebody asks.
+  // "What is still out" is `state: issued`, not a null holder.
+  holderId String?
+  holder   Employee? @relation(fields: [holderId], references: [id], onDelete: SetNull)
+
+  // issued | returned | writtenOff | lost
+  state String @default("issued")
+
+  issuedOn   String @default("") // calendar days, as everywhere else
+  returnedOn String @default("")
+  // Condition as recorded on the way back, in the receiver's words.
+  condition  String @default("")
+  note       String @default("")
+
+  // Minor units, like every other money column here. What it would cost to
+  // replace — the number that matters when somebody does not return it.
+  replacementCostMinor Int @default(0)
+
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([holderId, state])
+  @@index([state])
+  // Deliberately no unique constraint on (kind, serial). The same laptop is
+  // legitimately issued, returned and issued again, and a table-wide unique
+  // makes the second issue impossible — it returned a 500 rather than a
+  // refusal, which is how the constraint was found. What has to be unique is
+  // the serial among items *currently out*, and Prisma cannot express a
+  // partial index, so the route checks that instead.
+  @@index([kind, serial])
+}
+
 // One person thanking another.
 //
 // The only table in this app that records something good. Everything else here
