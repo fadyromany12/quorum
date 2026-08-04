@@ -14,6 +14,7 @@ import { signOut } from "next-auth/react";
 import {
   Bell,
   Contact,
+  Heart,
   LayoutDashboard,
   ClipboardPlus,
   UploadCloud,
@@ -73,6 +74,7 @@ import People from "./People.jsx";
 import Applications from "./Applications.jsx";
 import NotificationSettings from "./NotificationSettings.jsx";
 import PeopleFinder from "./PeopleFinder.jsx";
+import Recognition from "./Recognition.jsx";
 import OrgTree from "./OrgTree.jsx";
 import MoveReport from "./MoveReport.jsx";
 import FloorView from "./FloorView.jsx";
@@ -110,6 +112,7 @@ const TAB_META = {
   users: { label: "Accounts", labelAr: "الحسابات", icon: UserCog },
   settings: { label: "Settings", labelAr: "الإعدادات", icon: Settings2 },
   findpeople: { label: "Find someone", labelAr: "ابحث عن زميل", icon: Contact },
+  thanks: { label: "Thanks", labelAr: "شكر", icon: Heart },
   notifications: { label: "Notifications", labelAr: "الإشعارات", icon: Bell },
 };
 
@@ -768,6 +771,7 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
                 admin gate. A lead who cannot be told about approvals is the
                 whole problem this feature exists for. */}
             {tab === "findpeople" && <PeopleFinder />}
+            {tab === "thanks" && <Recognition />}
             {tab === "notifications" && <NotificationSettings />}
             {tab === "settings" && can(me, "admin") && (
               <SettingsView

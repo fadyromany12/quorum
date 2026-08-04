@@ -138,7 +138,7 @@ const SECTIONS = [
     id: "mine",
     label: "You",
     labelAr: "حسابك",
-    tabs: ["findpeople", "notifications"],
+    tabs: ["findpeople", "thanks", "notifications"],
   },
 ];
 

@@ -286,6 +286,8 @@ model Employee {
   clearance    ClearanceStep[]
   training     TrainingRecord[]
   documents    EmployeeDocument[]
+  recognitionReceived Recognition[] @relation("RecognitionReceived")
+  recognitionGiven    Recognition[] @relation("RecognitionGiven")
 
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -776,6 +778,46 @@ model PasswordReset {
 // Login throttle state, shared across serverless instances. One row per failed
 // attempt; a sliding window over `at` decides lockout, a success clears the
 // email's rows. Rows age out on the next failure for that email.
+// One person thanking another.
+//
+// The only table in this app that records something good. Everything else here
+// is a violation, a deduction, a lapse or a request — which is an accurate
+// picture of what HR software is for and a poor reason for anybody to open it
+// voluntarily.
+//
+// Deliberately not a points system. Points get gamed within a month: people
+// trade them, managers hand them out evenly to avoid awkwardness, and the
+// number stops meaning anything while still appearing on a scorecard. What is
+// stored is who, for what, and in whose words.
+model Recognition {
+  id String @id @default(cuid())
+
+  // Two people, and both matter. The receiver is the point; the giver is what
+  // stops it being anonymous praise nobody can weigh.
+  toId   String
+  to     Employee @relation("RecognitionReceived", fields: [toId], references: [id], onDelete: Cascade)
+  fromId String
+  from   Employee @relation("RecognitionGiven", fields: [fromId], references: [id], onDelete: Cascade)
+
+  // Validated against RECOGNITION_VALUES in the engine rather than as an enum,
+  // so a client account can add one without a migration.
+  value String
+
+  // In the giver's own words. The whole value of the row.
+  note String
+
+  // Visible to the floor, or only to the person and their manager. Some thanks
+  // are for something private — a colleague covering while somebody was ill —
+  // and a public wall would either expose that or silence it.
+  visibility String @default("team")
+
+  createdAt DateTime @default(now())
+
+  @@index([toId, createdAt])
+  @@index([fromId, createdAt])
+  @@index([createdAt])
+}
+
 // A document the company holds against a person.
 //
 // The pointer, never the file — the same decision Case.evidenceUrl and

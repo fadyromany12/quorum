@@ -20,6 +20,7 @@ import NotificationSettings from "@/components/NotificationSettings";
 import MyTraining from "@/components/portal/MyTraining";
 import RaiseEscalation from "@/components/portal/RaiseEscalation";
 import PeopleFinder from "@/components/PeopleFinder";
+import Recognition from "@/components/Recognition";
 import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
@@ -138,6 +139,12 @@ export default async function AgentPortalPage() {
           and the completeness warning on it can be the reason payroll has not
           been able to pay them. */}
       <MyProfile />
+
+      {/* The only screen here that records something good. High enough up that
+          somebody sees it before the warnings and the deductions — an app people
+          open only when something is wrong is one they learn to dread, which
+          makes every other feature in it harder to land. */}
+      <Recognition />
 
       {/* The one people-shaped screen an agent can open, because it carries
           nothing that would need the employee record's permission. */}

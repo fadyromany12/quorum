@@ -52,26 +52,26 @@ export const TABS_FOR = {
   SuperAdmin: [
     "dashboard", "joining", "floor", "exceptions", "requests", "approvals", "log", "rta", "wfm",
     "triage", "agents", "leaving", "people", "roster", "insights", "audit",
-    "helpdesk", "matrix", "users", "settings", "findpeople", "notifications",
+    "helpdesk", "matrix", "users", "settings", "findpeople", "thanks", "notifications",
   ],
   /* WFM owns real-time adherence and the plan behind it. The planning screen is
      their primary one now — the floor tells them what is happening, the plan
      tells them what was supposed to. */
-  WFM: ["wfm", "floor", "exceptions", "rta", "findpeople", "notifications"],
-  ProjectManager: ["dashboard", "joining", "floor", "exceptions", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster", "insights", "findpeople", "notifications"],
-  OperationsLead: ["dashboard", "joining", "floor", "exceptions", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster", "insights", "findpeople", "notifications"],
+  WFM: ["wfm", "floor", "exceptions", "rta", "findpeople", "thanks", "notifications"],
+  ProjectManager: ["dashboard", "joining", "floor", "exceptions", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster", "insights", "findpeople", "thanks", "notifications"],
+  OperationsLead: ["dashboard", "joining", "floor", "exceptions", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster", "insights", "findpeople", "thanks", "notifications"],
   /* HR owns both ends of the journey — admitting people and exiting them — so
      joining and leaving are theirs before anyone else's. */
   HRBusinessPartner: [
     "dashboard", "joining", "floor", "exceptions", "requests", "approvals",
-    "triage", "agents", "leaving", "people", "roster", "insights", "audit", "findpeople", "notifications",
+    "triage", "agents", "leaving", "people", "roster", "insights", "audit", "findpeople", "thanks", "notifications",
   ],
   /* IT exists to unlock people, and that is all. No directory, no cases, no
      pay — an account-recovery desk needs to know that a login exists and that
      the person in front of them matches it, and nothing else. Giving them the
      directory "so they can find someone" would hand the widest-hours, highest-
      turnover team in the building a read of the whole employee record. */
-  ITSupport: ["helpdesk", "findpeople", "notifications"],
+  ITSupport: ["helpdesk", "findpeople", "thanks", "notifications"],
   Agent: [],
 };
 
