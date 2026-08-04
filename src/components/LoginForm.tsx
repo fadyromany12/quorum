@@ -56,7 +56,9 @@ export default function LoginForm({ locale }: { locale: string }) {
     setError("");
     const res = await signIn("credentials", { email, password, redirect: false });
     if (res?.error) {
-      setError(t(locale, "login.invalid"));
+      /* "throttled" and a wrong password are genuinely different problems and
+         only one of them is solved by trying again. */
+      setError(t(locale, res.code === "throttled" ? "login.throttled" : "login.invalid"));
       setBusy(false);
       return;
     }
