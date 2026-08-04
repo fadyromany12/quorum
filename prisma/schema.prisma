@@ -94,7 +94,13 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  // Notification preferences: which kinds are muted, and quiet hours. Absent
+  // means everything on, which is the right default for an app nobody has
+  // configured — silence you did not ask for is indistinguishable from a bug.
+  notifyPrefs Json @default("{}")
+
   auditLogs      AuditLog[]
+  pushSubs       PushSubscription[]
   // The employment record behind this login, once one exists. Optional in both
   // directions: applicants have no login, and service accounts have no
   // employment record.
@@ -773,6 +779,41 @@ model PasswordReset {
 // Login throttle state, shared across serverless instances. One row per failed
 // attempt; a sliding window over `at` decides lockout, a success clears the
 // email's rows. Rows age out on the next failure for that email.
+// A browser's permission to interrupt somebody.
+//
+// Not a record of anything: delete every row and the app is unchanged, because
+// the inbox is derived and a push is only a nudge about it. That is why there
+// is no "sent" table either — storing what we told someone would be a second,
+// staler copy of what the app already knows.
+//
+// One row per browser, not per person. A phone and a laptop are two
+// subscriptions and both should ring; the endpoint is the identity, which is
+// why it carries the unique constraint rather than userId.
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The push service URL the browser handed us, plus the two keys needed to
+  // encrypt to it. Opaque to us — we never inspect or construct them.
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  // Only to help somebody recognise which device they are switching off.
+  label String @default("")
+
+  // A push service answering 404 or 410 means the browser dropped this
+  // subscription; those are deleted rather than retried. Anything else is
+  // transient and counted, so a permanently broken endpoint eventually goes
+  // rather than being retried forever.
+  failures   Int      @default(0)
+  lastSentAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
 model LoginAttempt {
   id    String   @id @default(cuid())
   email String

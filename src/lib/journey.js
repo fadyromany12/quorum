@@ -127,6 +127,16 @@ const SECTIONS = [
     labelAr: "الإعداد",
     tabs: ["helpdesk", "matrix", "users", "settings"],
   },
+  /* Yours, not the system's. Separate from "Set up" because that section is
+     the administrator's and this one is everybody's — a WFM analyst reaching
+     their own notification preferences must not thereby reach the discipline
+     matrix. */
+  {
+    id: "mine",
+    label: "You",
+    labelAr: "حسابك",
+    tabs: ["notifications"],
+  },
 ];
 
 /** Phase sections resolve their label and Arabic from the journey itself. */

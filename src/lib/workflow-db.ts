@@ -26,6 +26,7 @@ import { movePlan, moveEffects, nameOf } from "./hierarchy.js";
 import { PAY_REASONS } from "./comp.js";
 import { writePii } from "./employee-db";
 import { writeAudit } from "./db";
+import { notifyEmployee } from "./push-db";
 
 export type Actor = { id?: string; name: string; role: string };
 
@@ -204,7 +205,29 @@ export async function raiseRequest(
     select: REQUEST_SELECT,
   });
 
-  return { ok: true as const, request: decorate(toRequest(created)) };
+  /* Tell whoever is now blocking it.
+
+     Awaited but never allowed to fail the raise — notifyEmployee swallows its
+     own errors, so a push service outage cannot stop somebody booking leave.
+     Only the steps that are actually actionable now are told: a two-stage
+     chain must not wake the second approver about something the first has not
+     seen. */
+  const decorated = decorate(toRequest(created));
+  const firstOrder = Math.min(...created.steps.map((st) => st.order));
+  await Promise.all(
+    created.steps
+      .filter((st) => st.order === firstOrder)
+      .map((st) =>
+        notifyEmployee(st.approverId, "approvalWaiting", {
+          id: created.id,
+          subjectName: subject.fullNameEn,
+          summary: `${cfg.label} — ${subject.fullNameEn}`,
+          url: "/workspace",
+        }),
+      ),
+  );
+
+  return { ok: true as const, request: decorated };
 }
 
 /* ── Deciding ───────────────────────────────────────────────────────────────*/
@@ -485,6 +508,22 @@ export async function decideRequest(
         });
       });
     }
+  }
+
+  /* And tell the person who asked, once the whole chain has settled.
+
+     Only on settlement, deliberately: a first-stage approval is not an answer
+     to "can I have the day off", and telling somebody their leave was approved
+     when a second approver has yet to see it is the kind of message that gets
+     a flight booked. */
+  if (settled) {
+    await notifyEmployee(final.subjectId, "requestDecided", {
+      id: requestId,
+      decision: final.status,
+      summary: `${REQUEST_TYPES[final.type as keyof typeof REQUEST_TYPES]?.label ?? final.type}`,
+      note: action.note ?? "",
+      url: "/agent-portal",
+    });
   }
 
   return { ok: true as const, request: final, viaDelegation: mine.approverId !== actor.employeeId };

@@ -1,12 +1,12 @@
 {
   "name": "quorum",
   "version": "3.0.0",
-  "description": "Quorum — workforce compliance, present and accounted for. Next.js, Prisma/PostgreSQL, NextAuth, DCM verdict engine, agent self-service portal with digital acknowledgements",
+  "description": "Quorum \u2014 workforce compliance, present and accounted for. Next.js, Prisma/PostgreSQL, NextAuth, DCM verdict engine, agent self-service portal with digital acknowledgements",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "// build": "prisma generate runs here because hosts cache node_modules — without it the client is stale or missing",
+    "// build": "prisma generate runs here because hosts cache node_modules \u2014 without it the client is stale or missing",
     "build": "prisma generate && next build",
     "start": "next start",
     "test": "node test/engine.test.mjs && node test/employee.test.mjs && node test/employees-query.test.mjs && node test/effective.test.mjs && node test/comp.test.mjs && node test/attendance.test.mjs && node test/workflow.test.mjs && node test/leave.test.mjs && node test/profile-policy.test.mjs && node test/pdf-text.test.mjs && node test/clearance.test.mjs && node test/pii-crypto.test.mjs && node test/taxonomy.test.mjs && node test/journey.test.mjs && node test/training.test.mjs && node test/org.test.mjs && node test/guide.test.mjs && node test/wfm.test.mjs && node test/schedule.test.mjs && node test/tokens.test.mjs && node test/payslip.test.mjs && node test/payroll-config.test.mjs && node test/analytics.test.mjs && node test/reset.test.mjs && node test/i18n.test.mjs && node test/exceptions.test.mjs && node test/inbox.test.mjs && node test/promotion.test.mjs && node test/destructive.test.mjs && node test/signup.test.mjs && node test/hierarchy.test.mjs && node test/myschedule.test.mjs",
@@ -17,7 +17,8 @@
     "db:seed": "node prisma/seed.mjs",
     "unlock": "node scripts/break-glass.mjs unlock",
     "reset-password": "node scripts/break-glass.mjs reset",
-    "key:gen": "node -e \"console.log(require('./src/lib/pii-crypto.js').generateKey())\""
+    "key:gen": "node -e \"console.log(require('./src/lib/pii-crypto.js').generateKey())\"",
+    "push:keys": "node -e \"const w=require('web-push');const k=w.generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey);console.log('VAPID_PRIVATE_KEY='+k.privateKey);console.log('VAPID_SUBJECT=mailto:hr@konecta.com')\""
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -32,13 +33,15 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.22.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.2",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/web-push": "^3.6.4",
     "playwright-core": "^1.62.0",
     "prisma": "^7.8.0",
     "tailwindcss": "^4.3.2",

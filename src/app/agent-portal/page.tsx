@@ -16,6 +16,7 @@ import MyPayslips from "@/components/portal/MyPayslips";
 import MyProfile from "@/components/portal/MyProfile";
 import SwapShift from "@/components/portal/SwapShift";
 import MySchedule from "@/components/portal/MySchedule";
+import NotificationSettings from "@/components/NotificationSettings";
 import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
@@ -129,6 +130,11 @@ export default async function AgentPortalPage() {
           and the completeness warning on it can be the reason payroll has not
           been able to pay them. */}
       <MyProfile />
+
+      {/* Last, because it is a setting rather than a thing to do — but on this
+          page rather than buried, because the people who most need telling are
+          the ones who do not open the app. */}
+      <NotificationSettings />
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
