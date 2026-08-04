@@ -445,3 +445,140 @@ export function checkForecast(rows, opts = {}) {
   if (t !== undefined && (!(t > 0) || t >= 1)) problems.push("The service level target must be between 0 and 1.");
   return problems;
 }
+
+/* ── Intraday ───────────────────────────────────────────────────────────────
+
+   Three numbers exist in this system and have never been on one screen:
+   what the queue needs, who was rostered for it, and who is actually here.
+   The plan answers the first two and the floor answers the third, and the
+   question that matters at 13:45 — "is 14:00 going to hold?" — needs all
+   three side by side.
+
+   The rule this is built around: a future interval has no actual. Showing it
+   as zero would read as "nobody will be there", which is false and would put
+   the whole afternoon in red every morning. Unknown is a third state, not a
+   small number. */
+
+/** How an interval is doing, once there is enough to say. */
+export const INTRADAY_STATES = {
+  covered: { label: "Covered", rank: 0 },
+  tight: { label: "Tight", rank: 1 },
+  short: { label: "Short", rank: 2 },
+  unknown: { label: "Not yet", rank: -1 },
+};
+
+/**
+ * Who was actually present, per interval, from attendance.
+ *
+ * Counted by overlap rather than by start time: an agent whose break ends at
+ * 14:05 was present for most of the 14:00 interval and none of it by the
+ * measure that only looks at where the interval began.
+ *
+ * A person counts toward an interval when they were in a paid, queue-facing
+ * state for at least half of it — the same "were they really there" judgement
+ * a supervisor makes looking at the floor, rather than a fractional headcount
+ * that reads as precision it does not have.
+ *
+ * @param {Array<{aux: string, from: number, to: number}>} intervalsList
+ * @param {(aux: string) => boolean} isOnQueue
+ * @param {number} dayStartMs instant the local day begins
+ * @param {number} width interval minutes
+ */
+export function presenceByInterval(intervalsList, isOnQueue, dayStartMs, width = DEFAULT_INTERVAL) {
+  const out = {};
+  const slot = width * 60_000;
+  const perDay = intervalsPerDay(width);
+  for (let i = 0; i < perDay; i++) {
+    const from = dayStartMs + i * slot;
+    const to = from + slot;
+    let present = 0;
+    for (const iv of intervalsList ?? []) {
+      if (!isOnQueue(iv.aux)) continue;
+      const overlap = Math.min(iv.to, to) - Math.max(iv.from, from);
+      if (overlap >= slot / 2) present += 1;
+    }
+    out[intervalLabel(i, width)] = present;
+  }
+  return out;
+}
+
+/**
+ * Required, rostered and actual on one row per interval.
+ *
+ * @param {object} [input]
+ * @param {Array<{interval: string, rostered?: number, onPhone?: number}>} [input.plan]
+ *        planDay() output — its `rostered` is how many people you must put on
+ *        shift, which is the requirement here
+ * @param {Record<string, number>} [input.scheduled]               rostered per interval
+ * @param {Record<string, number>|null} [input.actual]             present per interval
+ * @param {string|null} [input.nowInterval] the interval in progress; later ones have no actual
+ * @param {number} [input.tightWithin] how close to the requirement still counts as tight
+ */
+export function intraday({ plan = [], scheduled = {}, actual = null, nowInterval = null, tightWithin = 1 } = {}) {
+  const rows = [];
+
+  for (const p of plan) {
+    const interval = p.interval;
+    /* planDay() calls this `rostered` — the headcount you must put on shift to
+       keep `onPhone` people on the queue once shrinkage is taken out. It is the
+       requirement, and it collides confusingly with `scheduled`, which is how
+       many you actually did roster. Read from the producer rather than assumed:
+       the first version read `p.agents`, a field planDay has never emitted, so
+       every requirement came through as zero and every interval looked covered.
+       The unit test missed it because the fixture invented the same wrong shape. */
+    const required = Number(p.rostered ?? p.onPhone ?? p.agents) || 0;
+    const rostered = Number(scheduled?.[interval]) || 0;
+
+    /* Compared, not matched. The first version walked the plan flipping a flag
+       when it saw nowInterval — which never fired, because a plan only contains
+       the intervals that have forecast rows and the clock is rarely standing in
+       one of them. Every future interval was then treated as known and reported
+       an actual of zero, which is the one thing this function exists to avoid.
+
+       Interval labels are zero-padded HH:MM, so a string comparison is a time
+       comparison, and it holds whether or not the plan is sparse. */
+    const isFuture = nowInterval !== null && interval > nowInterval;
+
+    const known = actual !== null && !isFuture;
+    const present = known ? Number(actual?.[interval]) || 0 : null;
+
+    const rosterGap = rostered - required;
+    const liveGap = known ? present - required : null;
+
+    /* Judged on the live number where there is one, and on the roster where
+       there is not — because before the shift starts the roster is the only
+       thing that can be wrong, and after it starts it is no longer the thing
+       that matters. */
+    const against = known ? present : rostered;
+    let state;
+    if (!known && actual !== null) state = "unknown";
+    else if (against >= required) state = "covered";
+    else if (against >= required - tightWithin) state = "tight";
+    else state = "short";
+
+    rows.push({ interval, required, rostered, actual: present, rosterGap, liveGap, state });
+  }
+  return rows;
+}
+
+/**
+ * The one sentence a lead wants from the whole grid.
+ *
+ * Names the worst interval rather than averaging, because an average day with
+ * one interval three short is not an average problem — it is that interval.
+ */
+export function intradaySummary(rows = []) {
+  const judged = rows.filter((r) => r.state !== "unknown");
+  const short = judged.filter((r) => r.state === "short");
+  const worst = judged.reduce((w, r) => {
+    const gap = r.actual === null ? r.rosterGap : r.liveGap;
+    const wGap = !w ? Infinity : w.actual === null ? w.rosterGap : w.liveGap;
+    return gap < wGap ? r : w;
+  }, null);
+  return {
+    intervals: rows.length,
+    judged: judged.length,
+    short: short.length,
+    worst: worst && (worst.actual === null ? worst.rosterGap : worst.liveGap) < 0 ? worst : null,
+  };
+}

@@ -20,6 +20,7 @@ import { CalendarDays, Gauge, TriangleAlert, CircleCheck, Info, Upload, RefreshC
 import { P, alpha } from "../lib/tokens.js";
 import { todayStr } from "../lib/dates.js";
 import { SectionTitle, Muted, BtnGhost, BtnPrimary, TInput, TSelect, Label, Field } from "./ui/index.jsx";
+import Intraday from "./Intraday.jsx";
 import Tip from "./ui/Tip.jsx";
 import { lobsFor } from "../lib/org.js";
 import RosterEditor from "./RosterEditor.jsx";
@@ -307,6 +308,17 @@ export default function WfmPlanner({ me, accounts = [], canWrite, canRoster }) {
               tone={P.sub}
             />
           </div>
+
+          {/* Required against rostered against actually-here. Above the
+              coverage strip because it answers the more urgent question: the
+              strip says whether the plan is sound, this says whether today is
+              holding. */}
+          <Intraday
+            rows={data.intraday ?? []}
+            summary={data.intradaySummary}
+            live={!!data.live}
+            nowInterval={data.nowInterval}
+          />
 
           {/* ── The strip ── */}
           <div className="p-4" style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 12 }}>
