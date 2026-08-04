@@ -144,6 +144,20 @@ export const REQUEST_TYPES = {
      agreement is a precondition captured when the swap is raised, not a second
      approval step: modelling it as one would leave a request sitting on an
      agent who has no queue, no SLA and no reason to look. */
+  /* Four changes in one approval: job, org, access and pay. They were four
+     unrelated edits, which is how someone ends up with a Team Leader title and
+     an Agent's login. hrThenFinance because a promotion is a pay change plus
+     more, and finance owns the paybill.
+
+     Not partial-capable, deliberately: there is no coherent half of this. You
+     cannot grant the title and withhold the access — that is precisely the
+     broken state it exists to prevent. */
+  promotion: {
+    label: "Promotion",
+    chain: "hrThenFinance",
+    slaDays: 5,
+    consequence: "Changes the job title, the reporting line, the login role and the salary together, on the effective date.",
+  },
   shiftSwap: {
     label: "Shift swap",
     chain: "directOnly",

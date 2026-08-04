@@ -21,6 +21,8 @@ import { todayStr } from "./dates.js";
 import { recordGrant } from "./leave-db";
 import { verifiedChangeSet } from "./profile-policy.js";
 import { swapPlan, overtimeRow } from "./schedule.js";
+import { promotionEffects } from "./promotion.js";
+import { PAY_REASONS } from "./comp.js";
 import { writePii } from "./employee-db";
 import { writeAudit } from "./db";
 
@@ -331,6 +333,74 @@ export async function decideRequest(
           note: row.note,
           published: true,
         },
+      });
+    }
+  }
+
+  /* An approved promotion applies all four of its parts, together.
+
+     Re-derived from the payload through promotionEffects() rather than trusted
+     field by field — the payload travelled through a browser, and one of these
+     four is a login role. That function drops any role outside the grantable
+     list, so the last gate before the write is the same one the form used.
+
+     Only on "approved". A promotion has no coherent partial state: granting the
+     title while withholding the access is the exact half-promotion this whole
+     feature exists to prevent. */
+  if (settled && final.type === "promotion" && final.status === "approved") {
+    const fx = promotionEffects((final.payload ?? {}) as Record<string, unknown>);
+
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(fx.employee).length) {
+        await tx.employee.update({ where: { id: final.subjectId }, data: fx.employee });
+      }
+
+      /* The access change. Guarded by the employee actually having a login —
+         a promotion for someone not yet given one must not fail the whole
+         transaction, it simply has no role to change. */
+      if (fx.role) {
+        const emp = await tx.employee.findUnique({
+          where: { id: final.subjectId },
+          select: { userId: true, fullNameEn: true },
+        });
+        if (emp?.userId) {
+          await tx.user.update({ where: { id: emp.userId }, data: { role: fx.role as never } });
+        }
+      }
+
+      if (fx.compensation) {
+        /* `reason` is an enum in the database and a string in the payload.
+           checkPromotion() already refuses anything outside PAY_REASONS, so
+           this is belt and braces — but the payload came through a browser and
+           a rejected enum would fail the whole transaction at write time
+           rather than at validation, which is the worst place to find out. */
+        const reason = (PAY_REASONS as readonly string[]).includes(fx.compensation.reason)
+          ? (fx.compensation.reason as never)
+          : ("Promotion" as never);
+        await tx.compensationRecord.create({
+          data: {
+            employeeId: final.subjectId,
+            baseSalary: fx.compensation.baseSalary,
+            currency: fx.compensation.currency,
+            reason,
+            effectiveFrom: fx.compensation.effectiveFrom,
+            note: fx.compensation.note,
+            actorName: "approval",
+          },
+        });
+      }
+    });
+
+    /* A role change is an escalation, so it is audited on its own rather than
+       only as part of "promotion approved" — the question an auditor asks is
+       "when did this account gain that access", and it should be answerable
+       without reading request payloads. */
+    if (fx.role) {
+      await writeAudit({
+        actor: { name: "approval", role: "system" },
+        action: "ROLE_CHANGED",
+        summary: `An approved promotion set the login role to ${fx.role}.`,
+        meta: { employeeId: final.subjectId, role: fx.role, requestId },
       });
     }
   }
