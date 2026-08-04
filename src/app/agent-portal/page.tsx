@@ -15,6 +15,7 @@ import MyRequests from "@/components/portal/MyRequests";
 import MyPayslips from "@/components/portal/MyPayslips";
 import MyProfile from "@/components/portal/MyProfile";
 import SwapShift from "@/components/portal/SwapShift";
+import MySchedule from "@/components/portal/MySchedule";
 import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
@@ -79,6 +80,14 @@ export default async function AgentPortalPage() {
       {/* The clock first: it is the thing an agent opens this page to use, and
           every other panel here is a read-only standing report. */}
       <AgentClock />
+
+      {/* Then the roster. "When do I work next" is the reason a shift worker
+          opens an app at all, and until now it was the one question the portal
+          could not answer — the schedule was planned, published, swapped
+          against and compared to the floor by everybody except the person
+          working it. It sits directly under the clock because the two are the
+          same subject: the hours you are on. */}
+      <MySchedule />
 
       {/* Leave: balance, request form, history — the approval engine's agent side. */}
       <MyRequests entitlementDays={entitlementDays} />
