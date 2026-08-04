@@ -5,6 +5,7 @@
 
 import { useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { LogIn, Eye, EyeOff, KeyRound } from "lucide-react";
 import { GlassCard, GlassButton, GlassInput, GlassLabel } from "@/components/glass";
 import Logo from "@/components/Logo";
@@ -12,7 +13,7 @@ import { BRAND } from "@/lib/brand";
 import { t } from "@/lib/i18n.js";
 import { CODE_TTL_MINUTES, DELIVERY } from "@/lib/reset.js";
 
-export default function LoginForm({ locale }: { locale: string }) {
+export default function LoginForm({ locale, signupOpen = false }: { locale: string; signupOpen?: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -56,9 +57,16 @@ export default function LoginForm({ locale }: { locale: string }) {
     setError("");
     const res = await signIn("credentials", { email, password, redirect: false });
     if (res?.error) {
-      /* "throttled" and a wrong password are genuinely different problems and
-         only one of them is solved by trying again. */
-      setError(t(locale, res.code === "throttled" ? "login.throttled" : "login.invalid"));
+      /* Four different problems, and only one of them is a wrong password.
+         Collapsing them into "invalid email or password" is how a throttled
+         admin loses an evening and a new joiner resets a password that was
+         never wrong. */
+      const KEY: Record<string, string> = {
+        throttled: "login.throttled",
+        pending: "login.pending",
+        deactivated: "login.deactivated",
+      };
+      setError(t(locale, KEY[res.code ?? ""] ?? "login.invalid"));
       setBusy(false);
       return;
     }
@@ -168,7 +176,18 @@ export default function LoginForm({ locale }: { locale: string }) {
           </button>
         </form>
       </GlassCard>
-      <p className="mt-4 text-center text-[11.5px] text-[color:var(--sub)]">{t(locale, "login.provisioned")}</p>
+      {/* Only when the deployment actually accepts applications. A link to a
+          closed form is a dead end for the one person least able to ask why. */}
+      {signupOpen ? (
+        <p className="mt-4 text-center text-[12.5px] text-[color:var(--sub)]">
+          {t(locale, "login.newJoiner")}{" "}
+          <Link href="/signup" className="text-[color:var(--signal)] underline underline-offset-2">
+            {t(locale, "login.signUp")}
+          </Link>
+        </p>
+      ) : (
+        <p className="mt-4 text-center text-[11.5px] text-[color:var(--sub)]">{t(locale, "login.provisioned")}</p>
+      )}
     </div>
   );
 }

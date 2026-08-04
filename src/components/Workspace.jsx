@@ -68,6 +68,7 @@ import UserManagement from "./UserManagement.jsx";
 import SettingsView from "./SettingsView.jsx";
 import AuditTrail from "./AuditTrail.jsx";
 import People from "./People.jsx";
+import Applications from "./Applications.jsx";
 import FloorView from "./FloorView.jsx";
 import RequestInbox from "./RequestInbox.jsx";
 import WfmPlanner from "./WfmPlanner.jsx";
@@ -687,13 +688,16 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
                 stages that phase covers — a separate component would be a
                 second implementation of search, paging and the profile view. */}
             {tab === "joining" && (
-              <People
-                accounts={data.accounts}
-                me={me}
-                stages={stagesOf("join")}
-                heading="New joiners"
-                blurb="Everyone between an accepted offer and a confirmed probation."
-              />
+              <div className="grid gap-4">
+                <Applications />
+                <People
+                  accounts={data.accounts}
+                  me={me}
+                  stages={stagesOf("join")}
+                  heading="New joiners"
+                  blurb="Everyone between an accepted offer and a confirmed probation."
+                />
+              </div>
             )}
             {tab === "leaving" && (
               <People

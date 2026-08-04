@@ -45,6 +45,14 @@ export const INBOX_KINDS = {
     tab: "requests",
     weight: 98,
   },
+  /* Above both approval queues, because a person waiting on this cannot sign
+     in at all. Every other item on this list is somebody inconvenienced; this
+     one is somebody who has started a job and cannot open the door. */
+  application: {
+    label: "New joiners waiting for your approval",
+    tab: "joining",
+    weight: 105,
+  },
   acknowledgement: {
     label: "Waiting for your signature",
     tab: null, // agents have no workspace tabs; this lives in the portal

@@ -58,6 +58,24 @@ class ThrottledSignin extends CredentialsSignin {
   code = "throttled";
 }
 
+/* Same idea, different cause. Someone who signed up and is waiting on their
+   manager holds a password that is correct and an account that does not open
+   yet — and "invalid email or password" tells them the one thing that is not
+   true. They then reset a password that was never wrong.
+
+   Only reachable once the password has been verified, so it discloses the
+   state of an account to the person who already proved they hold it. */
+class PendingApprovalSignin extends CredentialsSignin {
+  code = "pending";
+}
+
+/* And the other reason a login is disabled: it was switched off. Worth
+   separating, because "your manager has not approved you yet" is a wait and
+   "this account has been deactivated" is a conversation with HR. */
+class DeactivatedSignin extends CredentialsSignin {
+  code = "deactivated";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
@@ -87,14 +105,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new ThrottledSignin();
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.active || !verifyPassword(password, user.passHash)) {
+        const user = await prisma.user.findUnique({
+          where: { email },
+          // The applicant's stage is what separates "not approved yet" from
+          // "switched off", and both are disabled logins.
+          include: { employee: { select: { stage: true } } },
+        });
+        if (!user || !verifyPassword(password, user.passHash)) {
           await recordLoginFailure(email);
-          await auditLogin("LOGIN_FAILED", email, {
-            reason: !user ? "no_such_user" : !user.active ? "inactive" : "bad_password",
-          });
+          await auditLogin("LOGIN_FAILED", email, { reason: !user ? "no_such_user" : "bad_password" });
           return null;
         }
+
+        /* The password was right, so this branch is only ever reached by the
+           account holder — which is what makes it safe to say more than "no".
+           The failure is still counted: a disabled account is not a free
+           unlimited oracle for a password somebody guessed. */
+        if (!user.active) {
+          await recordLoginFailure(email);
+          const pending = user.employee?.stage === "Applicant";
+          await auditLogin("LOGIN_FAILED", email, { reason: pending ? "pending_approval" : "inactive" });
+          throw pending ? new PendingApprovalSignin() : new DeactivatedSignin();
+        }
+
         await clearLoginFailures(email);
         /* A successful sign-in kills any live recovery code. If someone signs
            in normally after a code was issued, either they never needed it or
