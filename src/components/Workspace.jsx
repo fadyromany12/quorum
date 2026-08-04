@@ -13,6 +13,7 @@ import { flushSync } from "react-dom";
 import { signOut } from "next-auth/react";
 import {
   Bell,
+  Contact,
   LayoutDashboard,
   ClipboardPlus,
   UploadCloud,
@@ -71,6 +72,7 @@ import AuditTrail from "./AuditTrail.jsx";
 import People from "./People.jsx";
 import Applications from "./Applications.jsx";
 import NotificationSettings from "./NotificationSettings.jsx";
+import PeopleFinder from "./PeopleFinder.jsx";
 import OrgTree from "./OrgTree.jsx";
 import MoveReport from "./MoveReport.jsx";
 import FloorView from "./FloorView.jsx";
@@ -107,6 +109,7 @@ const TAB_META = {
   matrix: { label: "Discipline matrix", labelAr: "مصفوفة الجزاءات", icon: Table2 },
   users: { label: "Accounts", labelAr: "الحسابات", icon: UserCog },
   settings: { label: "Settings", labelAr: "الإعدادات", icon: Settings2 },
+  findpeople: { label: "Find someone", labelAr: "ابحث عن زميل", icon: Contact },
   notifications: { label: "Notifications", labelAr: "الإشعارات", icon: Bell },
 };
 
@@ -764,6 +767,7 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
                 so they sit on every role's last screen rather than behind the
                 admin gate. A lead who cannot be told about approvals is the
                 whole problem this feature exists for. */}
+            {tab === "findpeople" && <PeopleFinder />}
             {tab === "notifications" && <NotificationSettings />}
             {tab === "settings" && can(me, "admin") && (
               <SettingsView

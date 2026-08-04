@@ -19,6 +19,7 @@ import MySchedule from "@/components/portal/MySchedule";
 import NotificationSettings from "@/components/NotificationSettings";
 import MyTraining from "@/components/portal/MyTraining";
 import RaiseEscalation from "@/components/portal/RaiseEscalation";
+import PeopleFinder from "@/components/PeopleFinder";
 import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
@@ -137,6 +138,10 @@ export default async function AgentPortalPage() {
           and the completeness warning on it can be the reason payroll has not
           been able to pay them. */}
       <MyProfile />
+
+      {/* The one people-shaped screen an agent can open, because it carries
+          nothing that would need the employee record's permission. */}
+      <PeopleFinder />
 
       {/* Quiet, and near the bottom. A prominent "report your manager"
           button on a portal somebody opens on the floor is a button nobody

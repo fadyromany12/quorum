@@ -127,15 +127,18 @@ const SECTIONS = [
     labelAr: "الإعداد",
     tabs: ["helpdesk", "matrix", "users", "settings"],
   },
-  /* Yours, not the system's. Separate from "Set up" because that section is
-     the administrator's and this one is everybody's — a WFM analyst reaching
-     their own notification preferences must not thereby reach the discipline
-     matrix. */
+  /* Yours, not the system's. Separate from "Set up" because that section is the
+     administrator's and this one is everybody's — a WFM analyst reaching their
+     own notification preferences must not thereby reach the discipline matrix.
+
+     The people finder sits here rather than under Records for the same reason:
+     it is not a record. It carries no pay, no identifiers and no history, which
+     is exactly what lets everybody open it. */
   {
     id: "mine",
     label: "You",
     labelAr: "حسابك",
-    tabs: ["notifications"],
+    tabs: ["findpeople", "notifications"],
   },
 ];
 
