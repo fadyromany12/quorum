@@ -285,6 +285,7 @@ model Employee {
   leaveLedger  LeaveLedgerEntry[]
   clearance    ClearanceStep[]
   training     TrainingRecord[]
+  documents    EmployeeDocument[]
 
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -775,6 +776,59 @@ model PasswordReset {
 // Login throttle state, shared across serverless instances. One row per failed
 // attempt; a sliding window over `at` decides lockout, a success clears the
 // email's rows. Rows age out on the next failure for that email.
+// A document the company holds against a person.
+//
+// The pointer, never the file — the same decision Case.evidenceUrl and
+// EmployeePII.nationalIdScanUrl already made. A scan of somebody's national ID
+// is the most sensitive object in the company and the safest place for it is
+// the document system that already has retention rules, access logs and a legal
+// owner. What this table owns is everything the file cannot tell you: what kind
+// it is, when it lapses, and whether a person has checked it.
+//
+// Its own table, not columns on Employee, for the reason the notification
+// preferences moved: Prisma reads every scalar on a model it touches, and
+// Employee is on the hot path of most of the app.
+model EmployeeDocument {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // Validated against DOC_KINDS in the engine rather than as an enum, so HR can
+  // add a client-specific certificate without a migration — the same choice
+  // ScheduleEntry.activity makes.
+  kind String
+
+  // Where to find it. A URL usually; "Cabinet 3, folder B" is a real answer in
+  // a company that still has a cabinet, and refusing it would only make people
+  // paste a fake link.
+  location String
+  title    String @default("")
+  note     String @default("")
+
+  // Calendar days, for the same timezone reasons as Case.date.
+  issuedOn  String @default("")
+  expiresOn String @default("")
+
+  // Checked against the original by a person. Uploading is not verifying, and
+  // the difference matters when somebody asks who confirmed this was real.
+  verifiedAt   DateTime?
+  verifiedById String?
+  verifiedByName String @default("")
+
+  // Superseded or filed in error. Never hard-deleted: "we never had it" and "we
+  // had it and someone removed it" are different answers to an auditor.
+  voided     Boolean @default(false)
+  voidReason String  @default("")
+
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, kind])
+  @@index([expiresOn])
+}
+
 // What somebody wants to be interrupted about.
 //
 // Its own table rather than a column on User, and the reason is a deployment

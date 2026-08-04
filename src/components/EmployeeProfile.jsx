@@ -18,6 +18,7 @@ import {
   UserMinus, StickyNote, Briefcase, GraduationCap, Landmark, Users2,
 } from "lucide-react";
 import { Card, Pill, Muted, BtnGhost, BtnPrimary, TInput, TSelect, Field } from "./ui/index.jsx";
+import Documents from "./Documents.jsx";
 import { P } from "../lib/tokens.js";
 import { fmtStamp, plural } from "../lib/format.js";
 import { todayStr } from "../lib/dates.js";
@@ -399,6 +400,12 @@ export default function EmployeeProfile({ employeeId, onBack, onChanged, nameByI
       {canExit && (
         <ExitPanel employee={employee} onDone={async () => { await load(); onChanged?.(); }} />
       )}
+
+      {/* The file. High up because "is their work permit still valid" is a
+          question that stops somebody working the day it is answered wrongly,
+          and because a missing statutory document is the sort of gap that is
+          invisible until an inspector asks. */}
+      <Documents employeeId={employeeId} employeeName={employee.fullNameEn} />
 
       {/* Clearance appears once someone is leaving; steps unlock in sequence. */}
       {/* Training sits above clearance because it belongs to the working part of
