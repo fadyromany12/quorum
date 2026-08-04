@@ -144,6 +144,36 @@ export const REQUEST_TYPES = {
      agreement is a precondition captured when the swap is raised, not a second
      approval step: modelling it as one would leave a request sitting on an
      agent who has no queue, no SLA and no reason to look. */
+  /* Four changes in one approval: job, org, access and pay. They were four
+     unrelated edits, which is how someone ends up with a Team Leader title and
+     an Agent's login. hrThenFinance because a promotion is a pay change plus
+     more, and finance owns the paybill.
+
+     Not partial-capable, deliberately: there is no coherent half of this. You
+     cannot grant the title and withhold the access — that is precisely the
+     broken state it exists to prevent. */
+  promotion: {
+    label: "Promotion",
+    chain: "hrThenFinance",
+    slaDays: 5,
+    consequence: "Changes the job title, the reporting line, the login role and the salary together, on the effective date.",
+  },
+  /* Moving somebody to a different manager.
+
+     Both managers approve, concurrently, because a reporting-line change is a
+     transaction between two teams: the one losing the person has to release
+     them and the one gaining them has to want them. Routing it through only the
+     current manager makes it a release nobody accepted; routing it through only
+     the new one makes it a recruitment the old team learns about afterwards.
+
+     Neither can overrule the other, and there is no half of this — the type is
+     not partial-capable, because a person cannot report to 60% of somebody. */
+  reportingLine: {
+    label: "Reporting line change",
+    chain: "losingAndGaining",
+    slaDays: 5,
+    consequence: "Moves them — and anyone reporting to them — under a different manager, which changes who approves their leave and who can see their record.",
+  },
   shiftSwap: {
     label: "Shift swap",
     chain: "directOnly",
@@ -185,7 +215,7 @@ export const STEP_STATES = ["pending", "approved", "rejected", "skipped"];
  *
  * @param {string} type
  * @param {{directManagerId?: string|null, functionalManagerId?: string|null, dottedManagerId?: string|null}} subject
- * @param {{hrIds?: string[], financeIds?: string[]}} [roles]
+ * @param {{hrIds?: string[], financeIds?: string[], gainingManagerId?: string}} [roles]
  * @returns {{ok: true, steps: Step[]} | {ok: false, reason: string}}
  */
 export function chainFor(type, subject, roles = {}) {
@@ -222,6 +252,22 @@ export function chainFor(type, subject, roles = {}) {
       .filter(Boolean)
       .filter((id, i, a) => a.indexOf(id) === i);
     if (!ids.length) return { ok: false, reason: "No manager assigned — assign one before raising this." };
+    return { ok: true, steps: ids.map((id) => step(id, 0, "co")) };
+  }
+
+  if (cfg.chain === "losingAndGaining") {
+    /* The manager releasing them and the manager taking them, side by side.
+       The gaining manager is not on the subject's record yet — that is the
+       whole point of the request — so it arrives through `roles`.
+
+       When somebody has no manager today this is an addition rather than a
+       move, and there is nobody to release them: one approver is correct, and
+       inventing a second would block the request on an arbitrary person. */
+    const gaining = roles.gainingManagerId || "";
+    if (!gaining) return { ok: false, reason: "No new manager was named, so there is nobody to approve taking them." };
+    const losing = subject?.directManagerId || "";
+    if (losing === gaining) return { ok: false, reason: "That is the manager they already report to." };
+    const ids = [losing, gaining].filter(Boolean);
     return { ok: true, steps: ids.map((id) => step(id, 0, "co")) };
   }
 
@@ -412,11 +458,22 @@ export function statusOf(/** @type {Request|null|undefined} */ request) {
     return request.autoResolvedAt ? "autoResolved" : "approved";
   }
 
-  // "any" steps: one approval at an order satisfies that order.
+  /* How an order is satisfied is a property of its steps, not of the chain
+     name. This used to read every multi-step order as "any" — one approval
+     anywhere in it settled the request — which was true for the only two chains
+     that had one (hrReview, hrThenFinance) and silently wrong for the first
+     chain that did not. A reporting-line change went through on the releasing
+     manager's approval alone, and the manager who was supposed to be *taking*
+     the person never got asked.
+
+     So `kind` decides: "co" means everyone at that order, "any" means one. */
   const orders = [...new Set(steps.map((s) => s.order))];
   const satisfied = orders.every((o) => {
     const at = steps.filter((s) => s.order === o);
-    return at.some((s) => s.state === "approved") || at.every((s) => s.state === "skipped");
+    const live = at.filter((s) => s.state !== "skipped");
+    if (!live.length) return true;
+    if (at.some((s) => s.kind === "co")) return live.every((s) => s.state === "approved");
+    return at.some((s) => s.state === "approved");
   });
   if (!satisfied) return "pending";
 

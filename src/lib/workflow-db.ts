@@ -21,6 +21,9 @@ import { todayStr } from "./dates.js";
 import { recordGrant } from "./leave-db";
 import { verifiedChangeSet } from "./profile-policy.js";
 import { swapPlan, overtimeRow } from "./schedule.js";
+import { promotionEffects } from "./promotion.js";
+import { movePlan, moveEffects, nameOf } from "./hierarchy.js";
+import { PAY_REASONS } from "./comp.js";
 import { writePii } from "./employee-db";
 import { writeAudit } from "./db";
 
@@ -102,6 +105,20 @@ export async function loadDelegations() {
   return rows;
 }
 
+/* The directory as the org rules see it.
+
+   Leavers are excluded, and that is not tidying: `movePlan` counts who moves
+   with somebody, and an exited person still carrying their old manager's id
+   gets counted as part of a team that no longer includes them. The preview two
+   managers approved said three people move; the record said four. The chart
+   endpoint filters the same way, so the plan and the picture agree. */
+async function orgSnapshot() {
+  return prisma.employee.findMany({
+    where: { stage: { not: "Exited" } },
+    select: { id: true, directManagerId: true, stage: true, account: true, fullNameEn: true, preferredName: true, empId: true },
+  });
+}
+
 /* ── Raising ────────────────────────────────────────────────────────────────*/
 
 /**
@@ -133,6 +150,17 @@ export async function raiseRequest(
   });
   if (!subject) return { ok: false as const, status: 404, reason: "No such employee." };
 
+  /* A reporting-line change is checked against the live chart before anybody is
+     asked, not only at settlement. Settlement re-checks because the chart can
+     move while the request sits in a queue — but a move that is already
+     impossible today should never reach two managers' queues at all. Approving
+     something that then quietly does not happen is worse than being told no. */
+  if (input.type === "reportingLine") {
+    const newManagerId = String((input.payload as Record<string, unknown> | undefined)?.newManagerId ?? "");
+    const plan = movePlan(subject.id, newManagerId, await orgSnapshot());
+    if (plan.problems.length) return { ok: false as const, status: 400, reason: plan.problems[0] };
+  }
+
   // HR and finance approver pools, for the chains that need them.
   const [hr, fin] = await Promise.all([
     prisma.employee.findMany({
@@ -148,6 +176,10 @@ export async function raiseRequest(
   const chain = chainFor(input.type, subject, {
     hrIds: hr.map((e) => e.id),
     financeIds: fin.map((e) => e.id),
+    /* The manager who would gain them is not on the subject's record yet —
+       that is the request — so it comes from the payload for the one chain
+       that needs it. */
+    gainingManagerId: String((input.payload as Record<string, unknown> | undefined)?.newManagerId ?? ""),
   });
   if (!chain.ok) return { ok: false as const, status: 409, reason: chain.reason };
 
@@ -331,6 +363,126 @@ export async function decideRequest(
           note: row.note,
           published: true,
         },
+      });
+    }
+  }
+
+  /* An approved promotion applies all four of its parts, together.
+
+     Re-derived from the payload through promotionEffects() rather than trusted
+     field by field — the payload travelled through a browser, and one of these
+     four is a login role. That function drops any role outside the grantable
+     list, so the last gate before the write is the same one the form used.
+
+     Only on "approved". A promotion has no coherent partial state: granting the
+     title while withholding the access is the exact half-promotion this whole
+     feature exists to prevent. */
+  if (settled && final.type === "promotion" && final.status === "approved") {
+    const fx = promotionEffects((final.payload ?? {}) as Record<string, unknown>);
+
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(fx.employee).length) {
+        await tx.employee.update({ where: { id: final.subjectId }, data: fx.employee });
+      }
+
+      /* The access change. Guarded by the employee actually having a login —
+         a promotion for someone not yet given one must not fail the whole
+         transaction, it simply has no role to change. */
+      if (fx.role) {
+        const emp = await tx.employee.findUnique({
+          where: { id: final.subjectId },
+          select: { userId: true, fullNameEn: true },
+        });
+        if (emp?.userId) {
+          await tx.user.update({ where: { id: emp.userId }, data: { role: fx.role as never } });
+        }
+      }
+
+      if (fx.compensation) {
+        /* `reason` is an enum in the database and a string in the payload.
+           checkPromotion() already refuses anything outside PAY_REASONS, so
+           this is belt and braces — but the payload came through a browser and
+           a rejected enum would fail the whole transaction at write time
+           rather than at validation, which is the worst place to find out. */
+        const reason = (PAY_REASONS as readonly string[]).includes(fx.compensation.reason)
+          ? (fx.compensation.reason as never)
+          : ("Promotion" as never);
+        await tx.compensationRecord.create({
+          data: {
+            employeeId: final.subjectId,
+            baseSalary: fx.compensation.baseSalary,
+            currency: fx.compensation.currency,
+            reason,
+            effectiveFrom: fx.compensation.effectiveFrom,
+            note: fx.compensation.note,
+            actorName: "approval",
+          },
+        });
+      }
+    });
+
+    /* A role change is an escalation, so it is audited on its own rather than
+       only as part of "promotion approved" — the question an auditor asks is
+       "when did this account gain that access", and it should be answerable
+       without reading request payloads. */
+    if (fx.role) {
+      await writeAudit({
+        actor: { name: "approval", role: "system" },
+        action: "ROLE_CHANGED",
+        summary: `An approved promotion set the login role to ${fx.role}.`,
+        meta: { employeeId: final.subjectId, role: fx.role, requestId },
+      });
+    }
+  }
+
+  /* An agreed reporting-line change moves the person — and only the person.
+     Their reports follow because they follow *them*; rewriting every
+     descendant's directManagerId would flatten the team into the new manager,
+     which is a different and much worse change than the one that was approved.
+
+     Re-planned against the live directory rather than trusting the payload,
+     because the chart may have moved while the request sat in a queue. A move
+     that was valid on Monday can be a loop by Friday, and applying it anyway
+     detaches a branch from the company. */
+  if (settled && final.type === "reportingLine" && final.status === "approved") {
+    const payload = (final.payload ?? {}) as Record<string, unknown>;
+    const newManagerId = String(payload.newManagerId ?? "");
+
+    const all = await orgSnapshot();
+    const plan = movePlan(final.subjectId, newManagerId, all);
+
+    if (plan.problems.length) {
+      /* Refused at settlement rather than silently skipped. The approvals
+         happened, so the absence of the move needs a row somebody can find. */
+      await writeAudit({
+        actor: { name: "approval", role: "system" },
+        action: "MOVE_NOT_APPLIED",
+        summary: `An approved reporting-line change was not applied: ${plan.problems[0]}`,
+        meta: { employeeId: final.subjectId, newManagerId, requestId, problems: plan.problems },
+      });
+    } else {
+      const fx = moveEffects({
+        newManagerId,
+        alsoFunctional: Boolean(payload.alsoFunctional),
+        newAccount: String(payload.newAccount ?? ""),
+      });
+
+      await prisma.$transaction(async (tx) => {
+        await tx.employee.update({ where: { id: final.subjectId }, data: fx.employee });
+        await tx.employeeEvent.create({
+          data: {
+            employeeId: final.subjectId,
+            type: "MANAGER_CHANGED",
+            title: "Reporting line changed",
+            detail:
+              `Now reports to ${nameOf(all.find((e) => e.id === newManagerId))}.` +
+              (plan.moving.length > 1 ? ` ${plan.moving.length - 1} of their team moved with them.` : ""),
+            fromVal: plan.losing ?? "",
+            toVal: newManagerId,
+            actorName: "approval",
+            actorRole: "system",
+          },
+        });
       });
     }
   }

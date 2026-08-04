@@ -18,6 +18,7 @@ import { can } from "@/lib/auth.js";
 import { buildInbox } from "@/lib/inbox.js";
 import { completeness } from "@/lib/profile-policy.js";
 import { inbox } from "@/lib/workflow-db";
+import { listApplications } from "@/lib/signup-db";
 
 export const GET = guarded(async () => {
   const actor = await requireRole(null);
@@ -40,6 +41,21 @@ export const GET = guarded(async () => {
   if (employee) {
     const waiting = await inbox(employee.id);
     if (waiting.length) sources.approval = { count: waiting.length };
+  }
+
+  /* Self sign-ups addressed to this person. Counted from the same function the
+     panel renders, for the same reason the approvals count is: a bell that
+     derives its own answer eventually disagrees with the screen it points at.
+
+     This one matters more than the rest of the list — everybody else on it is
+     inconvenienced, whereas somebody waiting here has started a job and cannot
+     sign in. */
+  const applications = await listApplications({ role: actor.role, employeeId: employee?.id ?? null });
+  if (applications.length) {
+    sources.application = {
+      count: applications.length,
+      detail: applications.slice(0, 3).map((a) => a.fullNameEn).join(", "),
+    };
   }
 
   // Cases this role would triage.

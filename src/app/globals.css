@@ -606,7 +606,16 @@ button:active:not(:disabled) { transform: scale(0.97); }
    the thing you just read about would miss. */
 .ao-tip { position: relative; display: inline-flex; }
 .ao-tip[data-fill="true"] { display: block; width: 100%; }
-.ao-tip[data-fill="true"] > .ao-tip-bubble { white-space: normal; width: max-content; }
+/* A `fill` tip wraps a layout box — a stat tile, a full-width row — and its
+   bubble is centred on that box. Capping the bubble at the trigger's own width
+   means it can never reach past the edge of something that is already inside
+   the page's padding, so an edge tile's tooltip stays readable instead of
+   being clipped. */
+.ao-tip[data-fill="true"] > .ao-tip-bubble {
+  white-space: normal;
+  width: max-content;
+  max-width: 100%;
+}
 .ao-tip-bubble {
   position: absolute;
   z-index: 60;
@@ -631,6 +640,29 @@ button:active:not(:disabled) { transform: scale(0.97); }
   transition: opacity var(--dur-quick) ease, transform var(--dur-quick) var(--ease-enter),
     visibility 0s linear var(--dur-quick);
 }
+/* Edge-anchored bubbles. A control in the header's right-hand cluster has no
+   room for a 260px bubble centred on it, so `align="end"` pins the bubble's
+   right edge to the trigger's instead of its middle. `start` is the mirror,
+   for anything hard against the left. Written with logical properties so both
+   flip correctly in Arabic. */
+.ao-tip[data-align="end"] .ao-tip-bubble {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  transform: translate(0, 3px);
+}
+.ao-tip[data-align="start"] .ao-tip-bubble {
+  inset-inline-start: 0;
+  transform: translate(0, 3px);
+}
+.ao-tip[data-side="bottom"][data-align="end"] .ao-tip-bubble,
+.ao-tip[data-side="bottom"][data-align="start"] .ao-tip-bubble {
+  transform: translate(0, -3px);
+}
+/* Never wider than the screen, whatever it is anchored to. */
+.ao-tip-bubble {
+  max-width: min(260px, calc(100vw - 24px));
+}
+
 .ao-tip[data-side="bottom"] .ao-tip-bubble {
   bottom: auto;
   top: calc(100% + 8px);
@@ -794,4 +826,33 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .ao-body main section,
 .ao-body main > * {
   min-width: 0;
+}
+
+/* A flex child defaults to min-width: auto and refuses to shrink below its
+   content, so one long row of name + reason + badge pushes the whole page
+   sideways. The rule above only reached the top two levels of main; the rows
+   that actually did it — the SLA list, the repeat-agent list — are eight deep.
+
+   Scoped to flex and grid children specifically, because that is where
+   min-width: auto does damage; anything that genuinely needs to stay wide
+   already sits inside its own overflow-x: auto container. */
+.ao-body main :is(.flex, .grid) > * {
+  min-width: 0;
+}
+
+/* The page itself never scrolls sideways.
+
+   Tooltips are 260px wide and anchored to the control they describe, so one
+   near the right edge hangs past it — and an absolutely positioned element
+   still extends the scrollable area even while invisible. On a 390px screen
+   that was 28 pixels of page scroll on every single tab: to read anything you
+   first had to nudge the page back left.
+
+   `clip` rather than `hidden` on purpose. `hidden` makes this a scroll
+   container, which breaks the sticky header — it would stick to this box
+   instead of the viewport. `clip` cuts the overflow without creating one.
+   Content that genuinely needs to scroll sideways (wide tables, the mobile nav
+   strip) has its own overflow-x: auto and is unaffected. */
+.ao-body {
+  overflow-x: clip;
 }

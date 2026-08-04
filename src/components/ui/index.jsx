@@ -142,12 +142,24 @@ export const Card = ({ title, children, right, accent }) => (
     className="p-4 ao-glass ao-lift"
     style={{ background: P.card, border: `1px solid ${accent || P.line}`, borderRadius: 12 }}
   >
+    {/* Wraps, and both halves may shrink.
+
+        Nearly every card puts a cluster of controls in `right` — a count, a
+        date, an account filter, Refresh — and on a phone that cluster is wider
+        than the screen. A non-wrapping flex row with unshrinkable children does
+        not clip, it pushes: the whole page gained 28 to 167 pixels of sideways
+        scroll on almost every tab, so reading anything on a phone meant nudging
+        the page back left first.
+
+        min-width: 0 is the other half of it. A flex child defaults to
+        min-width: auto and refuses to go below its content width, which is why
+        `flex-wrap` alone leaves a long title doing the same thing. */}
     {(title || right) && (
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="ao-disp font-bold uppercase tracking-wide" style={{ fontSize: 13, color: P.sub }}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="ao-disp font-bold uppercase tracking-wide min-w-0" style={{ fontSize: 13, color: P.sub }}>
           {title}
         </h2>
-        {right}
+        {right && <div className="min-w-0 max-w-full">{right}</div>}
       </div>
     )}
     <div className={title || right ? "mt-3" : ""}>{children}</div>

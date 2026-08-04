@@ -1,7 +1,7 @@
 /* Tab G — settings and utilities. */
 
 import { useEffect, useState } from "react";
-import { Download, DatabaseZap, TriangleAlert, Plus, X } from "lucide-react";
+import { Download, DatabaseZap, TriangleAlert, Plus, X, Lock } from "lucide-react";
 import { Card, TInput, BtnPrimary, BtnGhost, Muted, Field } from "./ui/index.jsx";
 import { P, alpha } from "../lib/tokens.js";
 import { RESET_DAYS, PER_INCIDENT_CAP, PER_MONTH_CAP, EMERGENCY_QUOTA, LAW_CITATION } from "../lib/constants.js";
@@ -211,19 +211,64 @@ export default function SettingsView({ data, onAccounts, onTls, onReset, onExpor
         </div>
       </Card>
 
-      <Card title="Danger zone" accent={`${alpha(P.brick, 0.33)}`}>
-        <div className="ao-disp font-bold uppercase tracking-wide flex items-center gap-1.5" style={{ fontSize: 13, color: P.brick, marginTop: -8 }}>
-          <TriangleAlert size={13} />
-          Hard reset
+      <DangerZone onReset={onReset} />
+    </div>
+  );
+}
+
+/* The reset is switched off on deployments unless somebody armed it
+   deliberately, so the button asks the server whether it would work before
+   offering itself. A control that fails after you have confirmed it teaches
+   you to click through the confirm dialog, which is the opposite of what a
+   danger zone is for. */
+function DangerZone({ onReset }) {
+  const [gate, setGate] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    fetch("/api/admin/reset")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g) => live && setGate(g))
+      .catch(() => {
+        /* Unknown, so the button stays as it was: the server refuses anyway,
+           and a network blip should not present a locked reset as available. */
+      });
+    return () => { live = false; };
+  }, []);
+
+  const off = gate !== null && gate.allowed === false;
+
+  return (
+    <Card title="Danger zone" accent={`${alpha(P.brick, 0.33)}`}>
+      <div
+        className="ao-disp font-bold uppercase tracking-wide flex items-center gap-1.5"
+        style={{ fontSize: 13, color: off ? P.sub : P.brick, marginTop: -8 }}
+      >
+        {off ? <Lock size={13} /> : <TriangleAlert size={13} />}
+        Hard reset
+      </div>
+      <Muted>Erases every entry and restores the default accounts, team leads and matrix. This cannot be undone.</Muted>
+
+      {off ? (
+        <div
+          className="mt-3 p-3"
+          style={{ background: "var(--wash)", border: `1px solid ${alpha(P.ink, 0.12)}`, borderRadius: 8, fontSize: 12.5, color: P.inkSoft }}
+        >
+          {gate.reason}
         </div>
-        <Muted>Erases every entry and restores the default accounts, team leads and matrix. This cannot be undone.</Muted>
+      ) : (
         <div className="mt-3">
           <BtnGhost color={P.brick} onClick={onReset} icon={TriangleAlert}>
             Reset all data
           </BtnGhost>
+          {gate?.environment && gate.environment !== "development" && (
+            <Muted>
+              Armed on this {gate.environment} deployment. Remove the switch once you are done.
+            </Muted>
+          )}
         </div>
-      </Card>
-    </div>
+      )}
+    </Card>
   );
 }
 

@@ -91,7 +91,7 @@ export default function AuditTrail() {
         </span>
       }
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {rows && (
             <span className="ao-mono" style={{ fontSize: 11, color: P.sub }}>
               {plural(visible.length, "event")}
@@ -105,7 +105,7 @@ export default function AuditTrail() {
     >
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <div
-          className="flex items-center gap-2"
+          className="flex flex-wrap items-center gap-2"
           style={{ border: `1px solid ${P.line}`, background: "var(--well)", borderRadius: 999, padding: "5px 12px", width: 240 }}
         >
           <Search size={13} color={P.sub} />

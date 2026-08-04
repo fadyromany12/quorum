@@ -68,6 +68,9 @@ import UserManagement from "./UserManagement.jsx";
 import SettingsView from "./SettingsView.jsx";
 import AuditTrail from "./AuditTrail.jsx";
 import People from "./People.jsx";
+import Applications from "./Applications.jsx";
+import OrgTree from "./OrgTree.jsx";
+import MoveReport from "./MoveReport.jsx";
 import FloorView from "./FloorView.jsx";
 import RequestInbox from "./RequestInbox.jsx";
 import WfmPlanner from "./WfmPlanner.jsx";
@@ -307,7 +310,7 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
             <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org}`} />
             <span className="flex-1" />
             <GuideButton role={me.role} />
-            <Tip label="Switch between dark, light and following your system" side="bottom">
+            <Tip label="Switch between dark, light and following your system" side="bottom" align="end">
               {/* The queue, visible from wherever you are. Clicking an entry
                   goes to the screen that owns it rather than rendering the list
                   twice. */}
@@ -668,7 +671,18 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
 
             {/* The directory is independent of the case ledger — an org with no
                 violations logged still has people in it. */}
-            {tab === "people" && <People accounts={data.accounts} me={me} />}
+            {/* The directory answers "who is this person"; the chart answers
+                "who reports to whom", and the move form is the only sanctioned
+                way to change the second. All three belong together. */}
+            {tab === "people" && (
+              <div className="grid gap-4">
+                <People accounts={data.accounts} me={me} />
+                <div className="grid gap-4 xl:grid-cols-2 items-start">
+                  <OrgTree />
+                  {can(me, "employeeWrite") && <MoveReport />}
+                </div>
+              </div>
+            )}
 
             {/* The whole population as a table. Cards are right for browsing
                 twenty people and useless for scanning two hundred. */}
@@ -687,13 +701,16 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
                 stages that phase covers — a separate component would be a
                 second implementation of search, paging and the profile view. */}
             {tab === "joining" && (
-              <People
-                accounts={data.accounts}
-                me={me}
-                stages={stagesOf("join")}
-                heading="New joiners"
-                blurb="Everyone between an accepted offer and a confirmed probation."
-              />
+              <div className="grid gap-4">
+                <Applications />
+                <People
+                  accounts={data.accounts}
+                  me={me}
+                  stages={stagesOf("join")}
+                  heading="New joiners"
+                  blurb="Everyone between an accepted offer and a confirmed probation."
+                />
+              </div>
             )}
             {tab === "leaving" && (
               <People
@@ -798,7 +815,7 @@ function UserChip({ me, onLogout }) {
           {ROLE_LABEL[me.role]}
         </div>
       </div>
-      <Tip label="Sign out" side="bottom">
+      <Tip label="Sign out" side="bottom" align="end">
         <button
           onClick={onLogout}
           aria-label="Sign out"
