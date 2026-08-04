@@ -225,5 +225,102 @@ ok("a negative volume is caught",
 ok("an impossible target is caught",
   W.checkForecast([{ interval: "09:00", contacts: 1, ahtSeconds: 200 }], { targetServiceLevel: 1 }).some((p) => /between 0 and 1/.test(p)));
 
+
+console.log("\n── Intraday: required, rostered and actually here ──");
+{
+  /* The real shape planDay() emits — `rostered` is the requirement. Written
+     from the producer, because the first version of this fixture invented
+     `{ agents }`, which planDay has never produced: the test passed and every
+     real requirement came through as zero. */
+  const plan = [
+    { interval: "09:00", onPhone: 9, rostered: 10 },
+    { interval: "09:30", onPhone: 11, rostered: 12 },
+    { interval: "10:00", onPhone: 11, rostered: 12 },
+  ];
+  const scheduled = { "09:00": 10, "09:30": 11, "10:00": 12 };
+  const actual = { "09:00": 10, "09:30": 8 };
+
+  const rows = W.intraday({ plan, scheduled, actual, nowInterval: "09:30" });
+
+  /* The rule the whole thing is built around. A future interval has no actual,
+     and showing it as zero would paint every afternoon red every morning —
+     unknown is a third state, not a small number. */
+  eq("a future interval reports no actual rather than zero", rows[2].actual, null);
+  eq("and is not judged", rows[2].state, "unknown");
+  eq("the interval in progress counts as known — real people are in it", rows[1].actual, 8);
+  eq("as does one already past", rows[0].actual, 10);
+
+  /* The gap this screen exists for: the roster looked one short and the floor
+     is four short, because three people are not where the roster says. */
+  eq("the roster gap and the live gap are different numbers", [rows[1].rosterGap, rows[1].liveGap], [-1, -4]);
+  eq("and the state follows the live number, not the roster", rows[1].state, "short");
+  eq("a fully covered interval says so", rows[0].state, "covered");
+
+  /* Before anything has started there is no live number, so the roster is the
+     only thing that can be wrong — and it is judged on that instead. */
+  const planned = W.intraday({ plan, scheduled, actual: null });
+  eq("with no actual at all, every interval is judged on the roster",
+    planned.map((r) => r.state), ["covered", "tight", "covered"]);
+  eq("and none of them claim an actual", planned.every((r) => r.actual === null), true);
+
+  /* The bug the first version had, and the reason it survived a passing test:
+     it flipped a flag when it saw nowInterval in the plan. A plan only contains
+     intervals that have forecast rows, so when the clock stands in one the plan
+     does not contain — which is most of the time — the flag never fired and
+     every future interval reported an actual of zero. Labels are zero-padded
+     HH:MM, so comparing them is comparing times, sparse plan or not. */
+  const sparse = W.intraday({
+    plan: [{ interval: "09:00", rostered: 10 }, { interval: "22:00", rostered: 4 }],
+    scheduled: { "09:00": 2 },
+    actual: {},
+    nowInterval: "04:30", // not in the plan
+  });
+  eq("a clock standing outside the plan still marks later intervals unknown",
+    sparse.map((r) => r.state), ["unknown", "unknown"]);
+  eq("and none of them invent a zero", sparse.map((r) => r.actual), [null, null]);
+
+  const midday = W.intraday({
+    plan: [{ interval: "09:00", rostered: 10 }, { interval: "22:00", rostered: 4 }],
+    scheduled: { "09:00": 10 },
+    actual: { "09:00": 10 },
+    nowInterval: "12:15", // also not in the plan, but after the first interval
+  });
+  eq("an interval already past is judged even when the clock is between rows",
+    [midday[0].state, midday[1].state], ["covered", "unknown"]);
+
+  const s = W.intradaySummary(rows);
+  eq("the summary counts only what could be judged", [s.intervals, s.judged], [3, 2]);
+  eq("one interval is short", s.short, 1);
+  /* Named rather than averaged: an average day with one interval four short is
+     not an average problem, it is that interval. */
+  eq("and the worst one is named", s.worst.interval, "09:30");
+  eq("a day with nothing short names no worst interval",
+    W.intradaySummary(W.intraday({ plan, scheduled: { "09:00": 20, "09:30": 20, "10:00": 20 }, actual: null })).worst, null);
+}
+
+console.log("\n── Presence is counted by overlap, not by where the interval began ──");
+{
+  const onQueue = (aux) => aux === "Available";
+  const day = Date.UTC(2026, 2, 10, 0, 0);
+  const at = (h, m) => day + (h * 60 + m) * 60000;
+  /* The boundary is half the slot — 15 minutes of a 30-minute interval.
+     One agent is there 09:00–09:10 (ten minutes, under it), another
+     09:05–09:30 (twenty-five, over it). Only the second was really there. */
+  const list = [
+    { aux: "Available", from: at(9, 0), to: at(9, 10) },
+    { aux: "Available", from: at(9, 5), to: at(9, 30) },
+    { aux: "Break", from: at(9, 0), to: at(9, 30) },
+  ];
+  const p = W.presenceByInterval(list, onQueue, day, 30);
+  eq("someone there for most of the interval counts, someone barely there does not", p["09:00"], 1);
+  eq("a break is not queue-facing, however long it is", p["09:30"] ?? 0, 0);
+  /* Exactly half counts — the boundary has to fall somewhere and an agent
+     present for half the interval was present. */
+  eq("exactly half the interval counts",
+    W.presenceByInterval([{ aux: "Available", from: at(9, 0), to: at(9, 15) }], onQueue, day, 30)["09:00"], 1);
+  eq("a minute under does not",
+    W.presenceByInterval([{ aux: "Available", from: at(9, 0), to: at(9, 14) }], onQueue, day, 30)["09:00"], 0);
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -17,6 +17,11 @@ import { prisma } from "@/lib/prisma";
 import { visibilityScope } from "@/lib/employee-db";
 import { planDay, coverage, shrinkageFrom, explain, checkForecast, DEFAULT_INTERVAL, INTERVAL_MINUTES } from "@/lib/wfm.js";
 import { scheduledByInterval, shrinkageInputs, findClashes } from "@/lib/schedule.js";
+import { presenceByInterval, intraday, intradaySummary } from "@/lib/wfm.js";
+import { intervals as toIntervals, ordered, localDay, AUX_CODES } from "@/lib/attendance.js";
+import { localMidnight, DEFAULT_TZ } from "@/lib/exceptions.js";
+import { intervalLabel } from "@/lib/wfm.js";
+import { todayStr } from "@/lib/dates.js";
 
 /** Defaults a BPO inbound queue is usually run to. Overridable per request so a
     planner can ask "what would 90/15 cost me" without saving anything. */
@@ -87,10 +92,61 @@ export const GET = guarded(async (req: Request) => {
   const override = q.get("shrinkage");
   const shrinkage = override === null ? shrink.shrinkage : Math.min(0.95, Math.max(0, Number(override) || 0));
 
+  /* Who is actually here — the third number, and the only one that was
+     missing. Loaded only for today: for any other date "actual" is either
+     history nobody is going to act on or a future nobody can know, and
+     computing it would spend queries to produce a column of nulls. */
+  const isToday = date === todayStr();
+  let actual: Record<string, number> | null = null;
+  let nowInterval: string | null = null;
+
+  if (isToday && rows.length) {
+    const ids = [...new Set(rows.map((r) => r.employeeId))];
+    const dayStart = localMidnight(date, DEFAULT_TZ);
+    if (dayStart !== null) {
+      const events = await prisma.attendanceEvent.findMany({
+        where: {
+          employeeId: { in: ids },
+          at: { gte: new Date(dayStart - 12 * 3600_000), lte: new Date(dayStart + 36 * 3600_000) },
+        },
+        select: { employeeId: true, type: true, aux: true, at: true },
+        orderBy: { at: "asc" },
+      });
+
+      /* Per person, then summed — an agent's intervals only make sense as one
+         stream, and merging everyone's punches into one list would read a
+         logout from one person as ending someone else's session. */
+      const byEmployee = new Map<string, Array<{ type: string; aux: string | null; at: number }>>();
+      for (const e of events) {
+        const list = byEmployee.get(e.employeeId) ?? [];
+        list.push({ type: e.type, aux: e.aux, at: e.at.getTime() });
+        byEmployee.set(e.employeeId, list);
+      }
+
+      const now = Date.now();
+      const onQueue = (aux: string) => !!(AUX_CODES as Record<string, { paid?: boolean; covers?: boolean }>)[aux]?.paid;
+      actual = {};
+      for (const list of byEmployee.values()) {
+        const mine = presenceByInterval(
+          toIntervals(ordered(list), now).filter((i: { from: number }) => localDay(i.from, DEFAULT_TZ) === date),
+          onQueue,
+          dayStart,
+          intervalMinutes,
+        ) as Record<string, number>;
+        for (const [k, v] of Object.entries(mine)) actual[k] = (actual[k] ?? 0) + (v > 0 ? 1 : 0);
+      }
+
+      // Which interval the clock is in, so nothing after it is judged.
+      const elapsed = Math.floor((now - dayStart) / 60_000);
+      if (elapsed >= 0) nowInterval = intervalLabel(Math.floor(elapsed / intervalMinutes), intervalMinutes);
+    }
+  }
+
   const problems = checkForecast(forecast, opts);
   const plan = problems.length ? [] : planDay(forecast, { ...opts, shrinkage });
   const scheduled = scheduledByInterval(rows, intervalMinutes);
   const cov = coverage(plan, scheduled);
+  const intradayRows = intraday({ plan, scheduled, actual, nowInterval });
 
   return NextResponse.json({
     date,
@@ -110,5 +166,11 @@ export const GET = guarded(async (req: Request) => {
     shrinkageDerived: shrink,
     rosterCount: rows.length,
     clashes: findClashes(rows).length,
+    /* Required, rostered and actually-here on one row per interval. Null actual
+       for a future interval rather than zero — see wfm.js. */
+    intraday: intradayRows,
+    intradaySummary: intradaySummary(intradayRows),
+    nowInterval,
+    live: actual !== null,
   });
 });
