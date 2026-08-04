@@ -13,22 +13,54 @@ import { prisma } from "@/lib/prisma";
 import { publicKey, pushStatus, saveSubscription, removeSubscription, notifyUser } from "@/lib/push-db";
 import { readPrefs, NOTIFY_KINDS, OPTIONAL_KINDS, isNotifyKind, isRequired } from "@/lib/notifications.js";
 
+/* The tables this feature needs may not exist yet.
+
+   A deployment picks up the code the moment it is merged and the migration
+   whenever somebody runs it, and those are not the same instant. In between,
+   every read here fails — and a 500 on a panel that sits on everybody's portal
+   is a worse first impression of the feature than the feature being off.
+
+   So a missing table reports itself as "not set up yet, here is the command",
+   which is true and actionable, rather than as a stack trace. */
+async function readState(userId: string) {
+  try {
+    const [pref, devices] = await Promise.all([
+      prisma.notificationPref.findUnique({ where: { userId }, select: { prefs: true } }),
+      prisma.pushSubscription.findMany({
+        where: { userId },
+        select: { id: true, endpoint: true, label: true, createdAt: true, lastSentAt: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    return { ok: true as const, pref, devices };
+  } catch {
+    return { ok: false as const, pref: null, devices: [] };
+  }
+}
+
 export const GET = guarded(async () => {
   const actor = await requireRole(null);
-  const [user, devices] = await Promise.all([
-    prisma.user.findUnique({ where: { id: actor.id }, select: { notifyPrefs: true } }),
-    prisma.pushSubscription.findMany({
-      where: { userId: actor.id },
-      select: { id: true, endpoint: true, label: true, createdAt: true, lastSentAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  const state = await readState(actor.id);
+  if (!state.ok) {
+    return NextResponse.json({
+      ready: false,
+      reason:
+        "Notifications are not set up on this database yet — the tables they need have not been created. " +
+        "Run `npx prisma db push` against it, then reload.",
+      publicKey: "",
+      prefs: readPrefs(null),
+      kinds: NOTIFY_KINDS,
+      optional: OPTIONAL_KINDS,
+      devices: [],
+    });
+  }
+  const { pref, devices } = state;
 
   const status = pushStatus();
   return NextResponse.json({
     ...status,
     publicKey: status.ready ? publicKey() : "",
-    prefs: readPrefs(user?.notifyPrefs),
+    prefs: readPrefs(pref?.prefs),
     kinds: NOTIFY_KINDS,
     optional: OPTIONAL_KINDS,
     devices: devices.map((d) => ({
@@ -55,7 +87,11 @@ export const POST = guarded(async (req: Request) => {
       ? incoming.muted.filter((k: unknown) => isNotifyKind(k) && !isRequired(k as string))
       : [];
     const prefs = readPrefs({ ...incoming, muted });
-    await prisma.user.update({ where: { id: actor.id }, data: { notifyPrefs: prefs } });
+    await prisma.notificationPref.upsert({
+      where: { userId: actor.id },
+      create: { userId: actor.id, prefs },
+      update: { prefs },
+    });
     return NextResponse.json({ ok: true, prefs });
   }
 

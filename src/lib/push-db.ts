@@ -112,19 +112,21 @@ export async function notifyUser(
   try {
     if (!pushReady()) return { sent: 0, skipped: "not configured" };
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { notifyPrefs: true, active: true },
-    });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { active: true } });
     if (!user?.active) return { sent: 0, skipped: "inactive account" };
 
-    const decision = shouldNotify(kind, readPrefs(user.notifyPrefs), { at });
+    /* Wrapped because this table may not exist yet — see the schema comment.
+       No preferences means every default, which is the right answer both for
+       somebody who has never set any and for a database mid-migration. */
+    const pref = await prisma.notificationPref
+      .findUnique({ where: { userId }, select: { prefs: true } })
+      .catch(() => null);
+    const decision = shouldNotify(kind, readPrefs(pref?.prefs), { at });
     if (!decision.send) return { sent: 0, skipped: decision.reason };
 
-    const subs = await prisma.pushSubscription.findMany({
-      where: { userId },
-      select: { id: true, endpoint: true, p256dh: true, auth: true },
-    });
+    const subs = await prisma.pushSubscription
+      .findMany({ where: { userId }, select: { id: true, endpoint: true, p256dh: true, auth: true } })
+      .catch(() => [] as { id: string; endpoint: string; p256dh: string; auth: string }[]);
     if (!subs.length) return { sent: 0, skipped: "no devices registered" };
 
     const payload = JSON.stringify(messageFor(kind, data));

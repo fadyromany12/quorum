@@ -94,13 +94,9 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  // Notification preferences: which kinds are muted, and quiet hours. Absent
-  // means everything on, which is the right default for an app nobody has
-  // configured — silence you did not ask for is indistinguishable from a bug.
-  notifyPrefs Json @default("{}")
-
   auditLogs      AuditLog[]
   pushSubs       PushSubscription[]
+  notifyPref     NotificationPref?
   // The employment record behind this login, once one exists. Optional in both
   // directions: applicants have no login, and service accounts have no
   // employment record.
@@ -779,6 +775,29 @@ model PasswordReset {
 // Login throttle state, shared across serverless instances. One row per failed
 // attempt; a sliding window over `at` decides lockout, a success clears the
 // email's rows. Rows age out on the next failure for that email.
+// What somebody wants to be interrupted about.
+//
+// Its own table rather than a column on User, and the reason is a deployment
+// ordering problem rather than a modelling one. Prisma selects every scalar
+// field unless told otherwise, so a new column on User is read by `authorize`
+// on every sign-in — and between a deploy and the migration that follows it,
+// that read throws and *nobody can log in*. Verified the hard way: renaming the
+// column locally returned 401 for a correct password.
+//
+// A new table has no such blast radius. Every read of it is wrapped, so before
+// the migration the feature reports itself as not set up and everything else
+// carries on working.
+model NotificationPref {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Which kinds are muted, and quiet hours. Absent means everything on, which
+  // is the right default for an app nobody has configured — silence you did not
+  // ask for is indistinguishable from a bug.
+  prefs     Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
 // A browser's permission to interrupt somebody.
 //
 // Not a record of anything: delete every row and the app is unchanged, because
