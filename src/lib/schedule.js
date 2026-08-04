@@ -524,3 +524,82 @@ export function checkSwap(a, b, { plan = null, roster = [], width = 30 } = {}) {
   }
   return { problems, warnings };
 }
+
+/* ── Overtime ───────────────────────────────────────────────────────────────
+
+   The loop this closes: an overtime request could be raised and approved and
+   nothing happened. The payslip pays overtime by reading roster rows whose
+   activity is "Overtime", so an approval that never became a row was an
+   approval payroll never heard about — the agent worked the hours, the manager
+   said yes, and the money did not move. */
+
+/** Hours are stored on the request; the roster works in minutes. */
+const HOURS_TO_MINUTES = 60;
+
+/**
+ * The roster row an approved overtime request becomes, or null.
+ *
+ * @param {object} request a settled request, with steps
+ * @param {number|null} grantedHours what the approvers actually allowed
+ * @returns {{employeeId: string, date: string, activity: string, startTime: string,
+ *            durationMinutes: number, note: string}|null}
+ */
+export function overtimeRow(request, grantedHours) {
+  if (!request || request.type !== "overtime") return null;
+  /* "partial" counts. An approver who grants two of the four hours asked for
+     has approved two hours of overtime, and refusing to write the row because
+     the status is not exactly "approved" would silently drop them. */
+  if (request.status !== "approved" && request.status !== "partial") return null;
+
+  const payload = request.payload ?? {};
+  const date = String(payload.date ?? "");
+  const startTime = String(payload.startTime ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(minutesOf(startTime))) return null;
+
+  /* Granted, never requested. Paying what was asked for rather than what was
+     allowed is the whole reason partial approval exists, and it is the error
+     that costs money in the direction nobody catches. */
+  const hours = Number(grantedHours ?? request.requestedUnits);
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+
+  return {
+    employeeId: String(request.subjectId),
+    date,
+    activity: "Overtime",
+    startTime,
+    durationMinutes: Math.round(hours * HOURS_TO_MINUTES),
+    note: `Approved overtime · request ${String(request.id ?? "").slice(0, 8)}`,
+  };
+}
+
+/**
+ * Whether a proposed overtime block is well-formed, and why not.
+ *
+ * Checked before it is offered rather than at approval, because an agent who
+ * types four hours starting at a time they were not working should be told
+ * then, not two days later by a manager who has to work out what they meant.
+ *
+ * @returns {string[]} empty when it can be raised
+ */
+export function checkOvertime({ date, startTime, hours, shift = null } = {}) {
+  const problems = [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date ?? ""))) problems.push("Pick the day the overtime was worked.");
+  if (!Number.isFinite(minutesOf(startTime))) problems.push("Give a start time.");
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h <= 0) problems.push("Give a number of hours greater than zero.");
+  /* A ceiling, because a typo of 80 for 8 is a typo that reaches payroll. Eight
+     hours of overtime in one day is already an exceptional day. */
+  else if (h > 12) problems.push("More than 12 hours in one day needs to be raised with HR, not as overtime.");
+
+  /* Overtime overlapping the shift it follows is almost always a mis-entered
+     start time — the hours are already paid as the shift. */
+  if (shift && Number.isFinite(minutesOf(startTime))) {
+    const start = minutesOf(startTime);
+    const shiftStart = minutesOf(shift.startTime);
+    const shiftEnd = shiftStart + (shift.durationMinutes ?? 0);
+    if (Number.isFinite(shiftStart) && start >= shiftStart && start < shiftEnd) {
+      problems.push("That start time falls inside the shift you were already rostered for.");
+    }
+  }
+  return problems;
+}

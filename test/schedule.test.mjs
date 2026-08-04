@@ -282,5 +282,57 @@ console.log("\n── Shift swaps ──");
     S.checkSwap(a, b, { roster: [a, b, clash] }).problems.length > 0);
 }
 
+
+console.log("\n── Overtime becomes the roster row payroll reads ──");
+/* The loop that was open: a request could be raised and approved and nothing
+   was written, while payslips price overtime by counting roster rows whose
+   activity is "Overtime". The assertions that matter are about money moving in
+   the right amount, and not twice. */
+{
+  const base = {
+    id: "abc12345", type: "overtime", subjectId: "e1", requestedUnits: 4,
+    payload: { date: "2026-03-02", startTime: "18:00" },
+  };
+
+  const full = S.overtimeRow({ ...base, status: "approved" }, 4);
+  eq("an approved four hours is four hours on the roster", full.durationMinutes, 240);
+  eq("as an Overtime activity, which is what the payslip counts", full.activity, "Overtime");
+  eq("against the subject, not the raiser", full.employeeId, "e1");
+
+  /* The error that costs money in the direction nobody notices. */
+  const partial = S.overtimeRow({ ...base, status: "partial" }, 2);
+  eq("a partial approval pays what was granted, not what was asked", partial.durationMinutes, 120);
+  ok("and a partial approval still writes a row", partial !== null);
+
+  eq("a rejected request writes nothing", S.overtimeRow({ ...base, status: "rejected" }, 4), null);
+  eq("nor does a withdrawn one", S.overtimeRow({ ...base, status: "withdrawn" }, 4), null);
+  eq("nor does one granted zero hours", S.overtimeRow({ ...base, status: "approved" }, 0), null);
+  eq("a request of another type is not overtime", S.overtimeRow({ ...base, type: "leave", status: "approved" }, 4), null);
+  eq("a malformed date writes nothing rather than a row nobody can read",
+    S.overtimeRow({ ...base, status: "approved", payload: { date: "March 2nd", startTime: "18:00" } }, 4), null);
+  eq("and neither does a missing start time",
+    S.overtimeRow({ ...base, status: "approved", payload: { date: "2026-03-02" } }, 4), null);
+}
+
+console.log("\n── Overtime is checked before it is offered ──");
+{
+  eq("a well-formed claim has nothing wrong with it",
+    S.checkOvertime({ date: "2026-03-02", startTime: "18:00", hours: 3 }), []);
+  ok("a missing day is caught", S.checkOvertime({ startTime: "18:00", hours: 3 }).length > 0);
+  ok("so are zero hours", S.checkOvertime({ date: "2026-03-02", startTime: "18:00", hours: 0 }).length > 0);
+  /* 80 for 8 is a typo that reaches payroll if nothing stops it. */
+  ok("and a fat-fingered 80 hours", S.checkOvertime({ date: "2026-03-02", startTime: "18:00", hours: 80 }).length > 0);
+  ok("a start time inside the rostered shift is refused — those hours are already paid",
+    S.checkOvertime({
+      date: "2026-03-02", startTime: "10:00", hours: 3,
+      shift: { startTime: "09:00", durationMinutes: 480 },
+    }).some((x) => /already rostered/.test(x)));
+  eq("but immediately after the shift is exactly the normal case",
+    S.checkOvertime({
+      date: "2026-03-02", startTime: "17:00", hours: 2,
+      shift: { startTime: "09:00", durationMinutes: 480 },
+    }), []);
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

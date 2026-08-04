@@ -20,7 +20,7 @@ import {
 import { todayStr } from "./dates.js";
 import { recordGrant } from "./leave-db";
 import { verifiedChangeSet } from "./profile-policy.js";
-import { swapPlan } from "./schedule.js";
+import { swapPlan, overtimeRow } from "./schedule.js";
 import { writePii } from "./employee-db";
 import { writeAudit } from "./db";
 
@@ -291,6 +291,46 @@ export async function decideRequest(
         action: "SWAP_NOT_APPLIED",
         summary: `An approved shift swap could not be applied — ${plan.reason}`,
         meta: { requestId, reason: plan.reason },
+      });
+    }
+  }
+
+  /* Approved overtime becomes the roster row payroll reads.
+
+     Until now this loop was open: the request existed, the approval happened,
+     and nothing was written — while payslips price overtime by counting roster
+     rows whose activity is "Overtime". So the agent worked the hours, the
+     manager said yes, and the money never moved.
+
+     grantedUnitsOf() rather than requestedUnits, because an approver who allows
+     two of the four hours asked for has approved two. Paying the ask instead of
+     the grant is the error that costs money in the direction nobody notices.
+
+     The upsert is keyed on employee + date + start time, so a retried
+     settlement converges on one row instead of paying twice. */
+  if (settled && final.type === "overtime") {
+    const row = overtimeRow(final, grantedUnitsOf(final as never));
+    if (row) {
+      await prisma.scheduleEntry.upsert({
+        where: {
+          employeeId_date_startTime: {
+            employeeId: row.employeeId,
+            date: row.date,
+            startTime: row.startTime,
+          },
+        },
+        create: {
+          ...row,
+          published: true,
+          actorName: "approval",
+          actorRole: "system",
+        },
+        update: {
+          activity: row.activity,
+          durationMinutes: row.durationMinutes,
+          note: row.note,
+          published: true,
+        },
       });
     }
   }

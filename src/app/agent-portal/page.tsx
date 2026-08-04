@@ -15,6 +15,7 @@ import MyRequests from "@/components/portal/MyRequests";
 import MyPayslips from "@/components/portal/MyPayslips";
 import MyProfile from "@/components/portal/MyProfile";
 import SwapShift from "@/components/portal/SwapShift";
+import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
 import { annualEntitlement } from "@/lib/employee.js";
@@ -81,6 +82,11 @@ export default async function AgentPortalPage() {
 
       {/* Leave: balance, request form, history — the approval engine's agent side. */}
       <MyRequests entitlementDays={entitlementDays} />
+
+      {/* Overtime sits beside leave and swaps: all three are asking for a
+          change to the hours you work, and an agent who stayed late will look
+          in the same place they look to book a day off. */}
+      <RequestOvertime />
 
       {/* Swaps sit with leave because they are the same kind of act — asking
           for a change to the days you work — and an agent who cannot get leave
