@@ -161,7 +161,7 @@ export default function BulkRoster({ people = [], patterns = [], onApplied }) {
 
       {/* ── Who ── */}
       <div className="mt-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="ao-disp uppercase tracking-wider font-semibold" style={{ fontSize: 11, color: P.sub }}>
             Who
           </span>

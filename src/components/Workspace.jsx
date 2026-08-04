@@ -310,7 +310,7 @@ export default function Workspace({ initial, me, themeIntent, density, locale = 
             <Logo size={34} subtitle={`${BRAND.tagline} · ${BRAND.org}`} />
             <span className="flex-1" />
             <GuideButton role={me.role} />
-            <Tip label="Switch between dark, light and following your system" side="bottom">
+            <Tip label="Switch between dark, light and following your system" side="bottom" align="end">
               {/* The queue, visible from wherever you are. Clicking an entry
                   goes to the screen that owns it rather than rendering the list
                   twice. */}
@@ -815,7 +815,7 @@ function UserChip({ me, onLogout }) {
           {ROLE_LABEL[me.role]}
         </div>
       </div>
-      <Tip label="Sign out" side="bottom">
+      <Tip label="Sign out" side="bottom" align="end">
         <button
           onClick={onLogout}
           aria-label="Sign out"

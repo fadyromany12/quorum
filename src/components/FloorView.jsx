@@ -72,7 +72,7 @@ function AgentTile({ agent, serverNow }) {
         gap: 7,
       }}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Icon size={14} color={tone} style={{ flexShrink: 0 }} />
         <span className="min-w-0 flex-1 truncate" style={{ fontSize: 13, fontWeight: 600, color: P.ink }}>
           {displayName(agent)}
@@ -171,7 +171,7 @@ export default function FloorView({ accounts = [] }) {
         </span>
       }
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={account}
             onChange={(e) => setAccount(e.target.value)}

@@ -107,7 +107,7 @@ export default function Exceptions({ accounts = [], onLogCase }) {
       <Card
         title={<span className="inline-flex items-center gap-2"><TriangleAlert size={14} />Attendance exceptions</span>}
         right={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <TInput type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: 150 }} />
             <TSelect value={account} onChange={(e) => setAccount(e.target.value)} style={{ width: 130 }}>
               <option value="All">All accounts</option>

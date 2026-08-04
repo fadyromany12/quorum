@@ -20,13 +20,19 @@
         wrapper. No state, no timers, no re-render on mouse move — and the
         keyboard case comes free rather than being the thing everyone forgets. */
 
-export default function Tip({ label, side = "top", children, className = "", fill = false }) {
+export default function Tip({ label, side = "top", align = "center", children, className = "", fill = false }) {
   if (!label) return children;
   return (
     /* `fill` is for wrapping something that is itself a layout box — a grid
        tile, a full-width row. Without it the wrapper is inline-flex, which is
        right for a button and wrong for a card. */
-    <span className={`ao-tip ${className}`} data-side={side} data-fill={fill ? "true" : undefined}>
+    /* `align` exists because a centred bubble on a control near the right edge
+       extends past the viewport. That used to give the whole page 28px of
+       sideways scroll; the page no longer scrolls, so instead the bubble was
+       being clipped and the last words of the label were unreadable. Anchoring
+       it to the trigger's own edge is the fix — nothing overflows and nothing
+       is cut off. */
+    <span className={`ao-tip ${className}`} data-side={side} data-align={align} data-fill={fill ? "true" : undefined}>
       {children}
       <span className="ao-tip-bubble ao-disp" role="presentation" aria-hidden="true">
         {label}
