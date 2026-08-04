@@ -231,6 +231,21 @@
    UI, Geist Mono data); no external font requests. */
 
 body {
+  /* Nothing decorative may widen the page.
+
+     Tooltips are ~260px and anchored to whatever they describe, so one on a
+     control near the right edge hangs past it — and an absolutely positioned
+     element extends the scrollable area even while invisible. That was 28px of
+     sideways scroll on every workspace tab and 54px on the agent portal, for
+     bubbles nobody was hovering.
+
+     `clip` rather than `hidden`: hidden makes this a scroll container and the
+     sticky headers would stick to it instead of the viewport. Anything that
+     genuinely scrolls sideways (wide tables, the mobile nav strip) has its own
+     overflow-x: auto and is unaffected. Set here rather than on a route wrapper
+     because every screen has a header, including the ones signed-out people
+     see. */
+  overflow-x: clip;
   min-height: 100vh;
   background-color: var(--bg-base);
   background-image: var(--aurora);

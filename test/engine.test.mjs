@@ -338,7 +338,20 @@ console.log("\n── RBAC + password hashing ──");
   eq("and can reach nothing else",
     ["employeeRead", "piiRead", "caseWrite", "audit", "admin", "wfmRead", "floorView", "log"]
       .filter((p) => can({ role: "ITSupport" }, p)), []);
-  eq("IT sees one screen", TABS_FOR.ITSupport, ["helpdesk"]);
+  /* Two screens now, and the second is not a widening. "settings" still means
+     the system configuration and stays with the admin; "notifications" is what
+     *this person* wants to be interrupted about, which every role needs and
+     none of which reaches anybody else's data. The assertion that matters is
+     unchanged — IT reaches no operational screen. */
+  /* The people finder is on every role's list and is not a widening: it carries
+     work contact details and who is on shift, and nothing that would need the
+     employee record's permission. That thinness is what lets an agent open it. */
+  eq("IT sees the help desk, the people finder, thanks and their own preferences",
+    TABS_FOR.ITSupport, ["helpdesk", "findpeople", "thanks", "notifications"]);
+  eq("and not the system configuration", TABS_FOR.ITSupport.includes("settings"), false);
+  eq("no directory, no cases, no pay",
+    ["people", "roster", "log", "triage", "agents", "insights", "audit", "wfm"]
+      .filter((t) => TABS_FOR.ITSupport.includes(t)), []);
 
   /* The permission map and the database enum must agree. They are two files
      that both define "what roles exist", and I have now had them disagree
@@ -365,8 +378,13 @@ console.log("\n── RBAC + password hashing ──");
      late — and WFM already owns both the roster that says who should have been
      there and the floor that says who was. The list stays exact so the next
      addition has to argue for itself the same way. */
-  eq("WFM sees planning, the floor, exceptions and the import, nothing else",
-    TABS_FOR.WFM, ["wfm", "floor", "exceptions", "rta"]);
+  eq("WFM sees planning, the floor, exceptions, the import, the people finder, thanks and their own preferences",
+    TABS_FOR.WFM, ["wfm", "floor", "exceptions", "rta", "findpeople", "thanks", "notifications"]);
+  eq("and not the system configuration", TABS_FOR.WFM.includes("settings"), false);
+  /* The real assertion: nothing operational leaked in with it. */
+  eq("and nothing about people, cases or pay",
+    ["people", "roster", "log", "triage", "agents", "insights", "audit", "approvals", "joining", "leaving"]
+      .filter((t) => TABS_FOR.WFM.includes(t)), []);
   eq("WFM cannot open the directory", TABS_FOR.WFM.includes("people"), false);
   eq("WFM still cannot touch cases", can({ role: "WFM" }, "caseWrite"), false);
   // Fleet-wide roles are unscoped by design: a WFM analyst usually has no direct

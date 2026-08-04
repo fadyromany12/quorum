@@ -15,6 +15,12 @@ import MyRequests from "@/components/portal/MyRequests";
 import MyPayslips from "@/components/portal/MyPayslips";
 import MyProfile from "@/components/portal/MyProfile";
 import SwapShift from "@/components/portal/SwapShift";
+import MySchedule from "@/components/portal/MySchedule";
+import NotificationSettings from "@/components/NotificationSettings";
+import MyTraining from "@/components/portal/MyTraining";
+import RaiseEscalation from "@/components/portal/RaiseEscalation";
+import PeopleFinder from "@/components/PeopleFinder";
+import Recognition from "@/components/Recognition";
 import RequestOvertime from "@/components/portal/RequestOvertime";
 // The shared rules engine — plain JS, identical to what the workspace uses.
 import { agentSummary, agentTimeline } from "@/lib/agents.js";
@@ -80,6 +86,14 @@ export default async function AgentPortalPage() {
           every other panel here is a read-only standing report. */}
       <AgentClock />
 
+      {/* Then the roster. "When do I work next" is the reason a shift worker
+          opens an app at all, and until now it was the one question the portal
+          could not answer — the schedule was planned, published, swapped
+          against and compared to the floor by everybody except the person
+          working it. It sits directly under the clock because the two are the
+          same subject: the hours you are on. */}
+      <MySchedule />
+
       {/* Leave: balance, request form, history — the approval engine's agent side. */}
       <MyRequests entitlementDays={entitlementDays} />
 
@@ -92,6 +106,11 @@ export default async function AgentPortalPage() {
           for a change to the days you work — and an agent who cannot get leave
           approved will often try a swap next. */}
       <SwapShift />
+
+      {/* Training, next to the roster rather than the pay: readiness is about
+          whether you can be put on the floor, which is the same subject as when
+          you are on it. */}
+      <MyTraining />
 
       {/* Pay. Below the clock and leave because those are what an agent opens
           this page to *use*; a payslip is something they come looking for once
@@ -120,6 +139,26 @@ export default async function AgentPortalPage() {
           and the completeness warning on it can be the reason payroll has not
           been able to pay them. */}
       <MyProfile />
+
+      {/* The only screen here that records something good. High enough up that
+          somebody sees it before the warnings and the deductions — an app people
+          open only when something is wrong is one they learn to dread, which
+          makes every other feature in it harder to land. */}
+      <Recognition />
+
+      {/* The one people-shaped screen an agent can open, because it carries
+          nothing that would need the employee record's permission. */}
+      <PeopleFinder />
+
+      {/* Quiet, and near the bottom. A prominent "report your manager"
+          button on a portal somebody opens on the floor is a button nobody
+          presses — but it has to be findable without asking anyone where it is. */}
+      <RaiseEscalation />
+
+      {/* Last, because it is a setting rather than a thing to do — but on this
+          page rather than buried, because the people who most need telling are
+          the ones who do not open the app. */}
+      <NotificationSettings />
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

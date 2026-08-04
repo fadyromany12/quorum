@@ -95,6 +95,8 @@ model User {
   updatedAt  DateTime @updatedAt
 
   auditLogs      AuditLog[]
+  pushSubs       PushSubscription[]
+  notifyPref     NotificationPref?
   // The employment record behind this login, once one exists. Optional in both
   // directions: applicants have no login, and service accounts have no
   // employment record.
@@ -283,6 +285,10 @@ model Employee {
   leaveLedger  LeaveLedgerEntry[]
   clearance    ClearanceStep[]
   training     TrainingRecord[]
+  documents    EmployeeDocument[]
+  assetsHeld          Asset[]
+  recognitionReceived Recognition[] @relation("RecognitionReceived")
+  recognitionGiven    Recognition[] @relation("RecognitionGiven")
 
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -773,6 +779,216 @@ model PasswordReset {
 // Login throttle state, shared across serverless instances. One row per failed
 // attempt; a sliding window over `at` decides lockout, a success clears the
 // email's rows. Rows age out on the next failure for that email.
+// A thing the company gave somebody and expects back.
+//
+// `Employee.assets` is a JSON array of strings — ["Laptop","MiFi"] — which is
+// enough to print on an onboarding checklist and not enough for anything else.
+// It cannot say which laptop, when it was issued, what condition it came back
+// in, or whether it came back at all. Offboarding therefore asks a human to
+// remember, and the clearance step for IT equipment is somebody's word.
+//
+// Its own table so an item has a life: issued, returned, or written off. Never
+// deleted — "we never gave them one" and "they kept it" are different answers,
+// and the second one has a cost attached.
+model Asset {
+  id String @id @default(cuid())
+
+  // Validated against ASSET_KINDS in the engine rather than as an enum, so a
+  // new headset model does not need a migration.
+  kind String
+
+  // What distinguishes this one from the identical one on the next desk. The
+  // whole reason a JSON array was not enough.
+  serial String @default("")
+  label  String @default("")
+
+  // Who has it, or had it. Kept after the item is closed off: an asset that
+  // vanishes from somebody's record the moment it is returned makes "what
+  // happened to their laptop" unanswerable at exactly the point somebody asks.
+  // "What is still out" is `state: issued`, not a null holder.
+  holderId String?
+  holder   Employee? @relation(fields: [holderId], references: [id], onDelete: SetNull)
+
+  // issued | returned | writtenOff | lost
+  state String @default("issued")
+
+  issuedOn   String @default("") // calendar days, as everywhere else
+  returnedOn String @default("")
+  // Condition as recorded on the way back, in the receiver's words.
+  condition  String @default("")
+  note       String @default("")
+
+  // Minor units, like every other money column here. What it would cost to
+  // replace — the number that matters when somebody does not return it.
+  replacementCostMinor Int @default(0)
+
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([holderId, state])
+  @@index([state])
+  // Deliberately no unique constraint on (kind, serial). The same laptop is
+  // legitimately issued, returned and issued again, and a table-wide unique
+  // makes the second issue impossible — it returned a 500 rather than a
+  // refusal, which is how the constraint was found. What has to be unique is
+  // the serial among items *currently out*, and Prisma cannot express a
+  // partial index, so the route checks that instead.
+  @@index([kind, serial])
+}
+
+// One person thanking another.
+//
+// The only table in this app that records something good. Everything else here
+// is a violation, a deduction, a lapse or a request — which is an accurate
+// picture of what HR software is for and a poor reason for anybody to open it
+// voluntarily.
+//
+// Deliberately not a points system. Points get gamed within a month: people
+// trade them, managers hand them out evenly to avoid awkwardness, and the
+// number stops meaning anything while still appearing on a scorecard. What is
+// stored is who, for what, and in whose words.
+model Recognition {
+  id String @id @default(cuid())
+
+  // Two people, and both matter. The receiver is the point; the giver is what
+  // stops it being anonymous praise nobody can weigh.
+  toId   String
+  to     Employee @relation("RecognitionReceived", fields: [toId], references: [id], onDelete: Cascade)
+  fromId String
+  from   Employee @relation("RecognitionGiven", fields: [fromId], references: [id], onDelete: Cascade)
+
+  // Validated against RECOGNITION_VALUES in the engine rather than as an enum,
+  // so a client account can add one without a migration.
+  value String
+
+  // In the giver's own words. The whole value of the row.
+  note String
+
+  // Visible to the floor, or only to the person and their manager. Some thanks
+  // are for something private — a colleague covering while somebody was ill —
+  // and a public wall would either expose that or silence it.
+  visibility String @default("team")
+
+  createdAt DateTime @default(now())
+
+  @@index([toId, createdAt])
+  @@index([fromId, createdAt])
+  @@index([createdAt])
+}
+
+// A document the company holds against a person.
+//
+// The pointer, never the file — the same decision Case.evidenceUrl and
+// EmployeePII.nationalIdScanUrl already made. A scan of somebody's national ID
+// is the most sensitive object in the company and the safest place for it is
+// the document system that already has retention rules, access logs and a legal
+// owner. What this table owns is everything the file cannot tell you: what kind
+// it is, when it lapses, and whether a person has checked it.
+//
+// Its own table, not columns on Employee, for the reason the notification
+// preferences moved: Prisma reads every scalar on a model it touches, and
+// Employee is on the hot path of most of the app.
+model EmployeeDocument {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // Validated against DOC_KINDS in the engine rather than as an enum, so HR can
+  // add a client-specific certificate without a migration — the same choice
+  // ScheduleEntry.activity makes.
+  kind String
+
+  // Where to find it. A URL usually; "Cabinet 3, folder B" is a real answer in
+  // a company that still has a cabinet, and refusing it would only make people
+  // paste a fake link.
+  location String
+  title    String @default("")
+  note     String @default("")
+
+  // Calendar days, for the same timezone reasons as Case.date.
+  issuedOn  String @default("")
+  expiresOn String @default("")
+
+  // Checked against the original by a person. Uploading is not verifying, and
+  // the difference matters when somebody asks who confirmed this was real.
+  verifiedAt   DateTime?
+  verifiedById String?
+  verifiedByName String @default("")
+
+  // Superseded or filed in error. Never hard-deleted: "we never had it" and "we
+  // had it and someone removed it" are different answers to an auditor.
+  voided     Boolean @default(false)
+  voidReason String  @default("")
+
+  actorName String   @default("")
+  actorRole String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, kind])
+  @@index([expiresOn])
+}
+
+// What somebody wants to be interrupted about.
+//
+// Its own table rather than a column on User, and the reason is a deployment
+// ordering problem rather than a modelling one. Prisma selects every scalar
+// field unless told otherwise, so a new column on User is read by `authorize`
+// on every sign-in — and between a deploy and the migration that follows it,
+// that read throws and *nobody can log in*. Verified the hard way: renaming the
+// column locally returned 401 for a correct password.
+//
+// A new table has no such blast radius. Every read of it is wrapped, so before
+// the migration the feature reports itself as not set up and everything else
+// carries on working.
+model NotificationPref {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Which kinds are muted, and quiet hours. Absent means everything on, which
+  // is the right default for an app nobody has configured — silence you did not
+  // ask for is indistinguishable from a bug.
+  prefs     Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+// A browser's permission to interrupt somebody.
+//
+// Not a record of anything: delete every row and the app is unchanged, because
+// the inbox is derived and a push is only a nudge about it. That is why there
+// is no "sent" table either — storing what we told someone would be a second,
+// staler copy of what the app already knows.
+//
+// One row per browser, not per person. A phone and a laptop are two
+// subscriptions and both should ring; the endpoint is the identity, which is
+// why it carries the unique constraint rather than userId.
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The push service URL the browser handed us, plus the two keys needed to
+  // encrypt to it. Opaque to us — we never inspect or construct them.
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  // Only to help somebody recognise which device they are switching off.
+  label String @default("")
+
+  // A push service answering 404 or 410 means the browser dropped this
+  // subscription; those are deleted rather than retried. Anything else is
+  // transient and counted, so a permanently broken endpoint eventually goes
+  // rather than being retried forever.
+  failures   Int      @default(0)
+  lastSentAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
 model LoginAttempt {
   id    String   @id @default(cuid())
   email String

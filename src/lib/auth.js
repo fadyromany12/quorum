@@ -36,6 +36,13 @@ export function passwordProblem(pw) {
 
 /* What each staff role may see. Agents never reach the workspace at all —
    they live in /agent-portal, enforced by the route-group layouts. */
+/* Note on "notifications": it is on every staff role's list, and it is not a
+   widening. "settings" means the system configuration and stays with the
+   admin; what somebody wants to be interrupted about is theirs, and a lead who
+   could not reach it would be unable to switch on the one thing that stops
+   approvals sitting unseen. Overloading "settings" with both meanings was the
+   first attempt and it made "HR does not get the setup screens" false, which
+   is a test that should stay true. */
 export const TABS_FOR = {
   /* Everything, including the help desk. SuperAdmin holds issueReset and
      revokeReset, and for a while held them with nowhere to use them: the
@@ -45,26 +52,26 @@ export const TABS_FOR = {
   SuperAdmin: [
     "dashboard", "joining", "floor", "exceptions", "requests", "approvals", "log", "rta", "wfm",
     "triage", "agents", "leaving", "people", "roster", "insights", "audit",
-    "helpdesk", "matrix", "users", "settings",
+    "helpdesk", "matrix", "users", "settings", "findpeople", "thanks", "notifications",
   ],
   /* WFM owns real-time adherence and the plan behind it. The planning screen is
      their primary one now — the floor tells them what is happening, the plan
      tells them what was supposed to. */
-  WFM: ["wfm", "floor", "exceptions", "rta"],
-  ProjectManager: ["dashboard", "joining", "floor", "exceptions", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster", "insights"],
-  OperationsLead: ["dashboard", "joining", "floor", "exceptions", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster", "insights"],
+  WFM: ["wfm", "floor", "exceptions", "rta", "findpeople", "thanks", "notifications"],
+  ProjectManager: ["dashboard", "joining", "floor", "exceptions", "requests", "log", "wfm", "triage", "agents", "leaving", "people", "roster", "insights", "findpeople", "thanks", "notifications"],
+  OperationsLead: ["dashboard", "joining", "floor", "exceptions", "requests", "approvals", "wfm", "agents", "leaving", "people", "roster", "insights", "findpeople", "thanks", "notifications"],
   /* HR owns both ends of the journey — admitting people and exiting them — so
      joining and leaving are theirs before anyone else's. */
   HRBusinessPartner: [
     "dashboard", "joining", "floor", "exceptions", "requests", "approvals",
-    "triage", "agents", "leaving", "people", "roster", "insights", "audit",
+    "triage", "agents", "leaving", "people", "roster", "insights", "audit", "findpeople", "thanks", "notifications",
   ],
   /* IT exists to unlock people, and that is all. No directory, no cases, no
      pay — an account-recovery desk needs to know that a login exists and that
      the person in front of them matches it, and nothing else. Giving them the
      directory "so they can find someone" would hand the widest-hours, highest-
      turnover team in the building a read of the whole employee record. */
-  ITSupport: ["helpdesk"],
+  ITSupport: ["helpdesk", "findpeople", "thanks", "notifications"],
   Agent: [],
 };
 

@@ -77,16 +77,21 @@ console.log("\n── Building a role's navigation ──");
   eq("metadata is merged onto the item", nav[0].items[0].label, "Overview");
   eq("the item keeps its id", nav[0].items[0].id, "dashboard");
   eq("nothing is lost", nav.flatMap((s) => s.items).length, A.TABS_FOR.SuperAdmin.length);
+  /* "mine" is last on purpose: it holds what *you* want to be interrupted
+     about, which belongs after the work rather than among it. */
   eq("order follows the journey, not the role's list",
-    nav.map((s) => s.id), ["overview", "join", "work", "grow", "leave", "records", "setup"]);
+    nav.map((s) => s.id), ["overview", "join", "work", "grow", "leave", "records", "setup", "mine"]);
 }
 {
   /* WFM's screens all live in one phase. They should see one heading with
      their whole screen set under it, not seven headings with three entries
      scattered among five empty ones. */
   const nav = J.navFor(A.TABS_FOR.WFM);
-  eq("empty sections are dropped", nav.length, 1);
+  /* Two: their four operational screens under Working, and their own
+     notification preferences under You. Everything else is dropped. */
+  eq("empty sections are dropped", nav.length, 2);
   eq("WFM's screens sit under Working", nav[0].id, "work");
+  eq("and their own preferences sit apart from them", nav[1].id, "mine");
   /* Navigation order is the journey's, not the role's — the tab list happens to
      name planning first, and the sidebar still shows the floor before it. */
   eq("all of them are there, in the navigation's order",

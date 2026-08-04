@@ -32,7 +32,7 @@ export default async function AgentPortalLayout({ children }: { children: ReactN
         <Logo size={32} subtitle={t(locale, "portal.subtitle")} />
         <span className="flex-1" />
         <GuideButton role="Agent" />
-        <Tip label="Switch between English and Arabic" side="bottom">
+        <Tip label="Switch between English and Arabic" side="bottom" align="end">
           <LangToggle locale={locale} />
         </Tip>
         <Tip label="Switch between dark, light and following your system" side="bottom">
